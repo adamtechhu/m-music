@@ -1,0 +1,25 @@
+.gradle/
+.idea/
+build/
+**/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+*.iml
+
+# Android signing / local release assets
+release/
+*.jks
+*.keystore
+
+# Generated APKs / bundles
+*.apk
+*.aab
+*.ap_
+*.idsig
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+*.log

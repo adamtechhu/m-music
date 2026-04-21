@@ -1,6 +1,7 @@
 package com.mmusic.app.ui
 
 import android.app.Application
+import android.content.ContentValues
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
@@ -8,7 +9,9 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.mmusic.app.BuildConfig
 import com.mmusic.app.data.AppLanguage
+import com.mmusic.app.data.AppReleaseNotes
 import com.mmusic.app.data.AppTab
 import com.mmusic.app.data.AudioOutputMode
 import com.mmusic.app.data.BottomBarSize
@@ -22,6 +25,7 @@ import com.mmusic.app.data.LibraryCategory
 import com.mmusic.app.data.LibraryDrilldown
 import com.mmusic.app.data.MMusicUiState
 import com.mmusic.app.data.MediaStoreScanner
+import com.mmusic.app.data.MetadataOverride
 import com.mmusic.app.data.MusicSourceType
 import com.mmusic.app.data.MusicTrack
 import com.mmusic.app.data.PlaybackMode
@@ -99,6 +103,8 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                 bottomBarCompact = prefs.getBoolean("bottom_bar_compact", false),
                 bottomBarShowLabels = prefs.getBoolean("bottom_bar_show_labels", true),
                 bottomBarActiveGlow = prefs.getBoolean("bottom_bar_active_glow", true),
+                showServerTab = prefs.getBoolean("show_server_tab", true),
+                showRadioTab = prefs.getBoolean("show_radio_tab", true),
                 selectedAudioOutputMode = runCatching {
                     AudioOutputMode.valueOf(
                         prefs.getString("selected_audio_output_mode", AudioOutputMode.Speaker.name) ?: AudioOutputMode.Speaker.name
@@ -112,6 +118,14 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                     fallbackLocale = Locale.getDefault()
                 ),
                 tracks = restoreDownloadedServerTracks(),
+                favoriteTrackIds = restoreFavoriteTrackIds(),
+                metadataOverrides = restoreMetadataOverrides(),
+                radioCountryCode = prefs.getString("radio_country_code", "").orEmpty(),
+                radioCountryName = prefs.getString("radio_country_name", "").orEmpty(),
+                radioSearchQuery = prefs.getString("radio_search_query", "").orEmpty(),
+                showRadioMetadata = prefs.getBoolean("show_radio_metadata", true),
+                releaseNotes = releaseNotesForCurrentVersion(),
+                showReleaseNotesDialog = shouldShowReleaseNotesDialog(),
                 serverConfig = ServerConfig(
                     type = ServerType.valueOf(prefs.getString("server_type", ServerType.Generic.name) ?: ServerType.Generic.name),
                     endpoint = prefs.getString("server_endpoint", "https://media.example.com/library").orEmpty(),
@@ -139,10 +153,12 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         }
         _uiState.update { it.copy(sources = restoreSourceSettings()) }
         refreshDetectedSources()
+        loadRadioStationsIfConfigured()
         val savedServer = _uiState.value.serverConfig
         if (savedServer.endpoint.isNotBlank() && !savedServer.endpoint.contains("media.example.com")) {
             connectToServer()
         }
+        maybeCheckForUpdatesOnLaunch()
         connectivityManager?.registerDefaultNetworkCallback(networkCallback)
         viewModelScope.launch {
             PlaybackStateStore.state.collect { snapshot ->
@@ -184,7 +200,31 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         _uiState.update { it.copy(infoDialogMessage = null) }
     }
 
+    fun dismissReleaseNotesDialog() {
+        prefs.edit().putString("last_seen_release_notes_version", BuildConfig.VERSION_NAME).apply()
+        _uiState.update { it.copy(showReleaseNotesDialog = false) }
+    }
+
+    fun showReleaseNotesDialog() {
+        _uiState.update { it.copy(showReleaseNotesDialog = true) }
+    }
+
+    fun dismissUpdateDialog() {
+        _uiState.update { it.copy(showUpdateDialog = false) }
+    }
+
+    fun openRadioCountryPicker() {
+        _uiState.update { it.copy(showRadioCountryPicker = true) }
+    }
+
+    fun dismissRadioCountryPicker() {
+        _uiState.update { it.copy(showRadioCountryPicker = false) }
+    }
+
     fun selectTab(tab: AppTab) {
+        if (tab == AppTab.Radio && _uiState.value.radioCountryCode.isBlank()) {
+            _uiState.update { it.copy(showRadioCountryPicker = true) }
+        }
         _uiState.update {
             it.copy(
                 selectedTab = tab,
@@ -248,6 +288,36 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
     fun setBottomBarActiveGlow(enabled: Boolean) {
         prefs.edit().putBoolean("bottom_bar_active_glow", enabled).apply()
         _uiState.update { it.copy(bottomBarActiveGlow = enabled) }
+    }
+
+    fun setShowServerTab(enabled: Boolean) {
+        prefs.edit().putBoolean("show_server_tab", enabled).apply()
+        _uiState.update {
+            it.copy(
+                showServerTab = enabled,
+                selectedTab = if (!enabled && it.selectedTab == AppTab.Server) AppTab.Player else it.selectedTab
+            )
+        }
+    }
+
+    fun setShowRadioTab(enabled: Boolean) {
+        prefs.edit().putBoolean("show_radio_tab", enabled).apply()
+        _uiState.update {
+            it.copy(
+                showRadioTab = enabled,
+                selectedTab = if (!enabled && it.selectedTab == AppTab.Radio) AppTab.Player else it.selectedTab
+            )
+        }
+    }
+
+    fun updateRadioSearchQuery(query: String) {
+        prefs.edit().putString("radio_search_query", query).apply()
+        _uiState.update { it.copy(radioSearchQuery = query) }
+    }
+
+    fun setShowRadioMetadata(enabled: Boolean) {
+        prefs.edit().putBoolean("show_radio_metadata", enabled).apply()
+        _uiState.update { it.copy(showRadioMetadata = enabled) }
     }
 
     fun selectAudioOutputMode(mode: AudioOutputMode) {
@@ -330,6 +400,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
 
     fun togglePlayback(track: MusicTrack) {
         val current = _uiState.value.currentTrackId
+        val hadPlaybackAlready = current != null
         if (current == track.id) {
             if (isWifiOnlyBlocked(track)) {
                 handleWifiOnlyBlocked()
@@ -339,11 +410,17 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             startTrack(track)
         }
-        _uiState.update { it.copy(isPlayerFullscreen = true) }
+        if (track.sourceType == MusicSourceType.Radio) {
+            _uiState.update { it.copy(radioLiveDetails = track.album) }
+            refreshRadioLiveDetails(track)
+        }
+        if (!hadPlaybackAlready) {
+            _uiState.update { it.copy(isPlayerFullscreen = true) }
+        }
     }
 
     fun toggleCurrentPlayback() {
-        val currentTrack = _uiState.value.tracks.firstOrNull { it.id == _uiState.value.currentTrackId }
+        val currentTrack = findTrackById(_uiState.value.currentTrackId)
         if (currentTrack != null && isWifiOnlyBlocked(currentTrack)) {
             handleWifiOnlyBlocked()
             return
@@ -569,6 +646,101 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         reloadServerTracksIfConnected()
     }
 
+    fun toggleFavorite(track: MusicTrack) {
+        val nextFavorites = _uiState.value.favoriteTrackIds.toMutableSet().apply {
+            if (!add(track.id)) remove(track.id)
+        }
+        prefs.edit().putStringSet("favorite_track_ids", nextFavorites).apply()
+        _uiState.update { it.copy(favoriteTrackIds = nextFavorites) }
+    }
+
+    fun updateTrackMetadata(track: MusicTrack, title: String, artist: String, album: String) {
+        if (!track.isLocalFile || track.sourceType == MusicSourceType.Server) {
+            _uiState.update { it.copy(infoDialogMessage = app.getString(com.mmusic.app.R.string.metadata_edit_server_blocked)) }
+            return
+        }
+        val sanitized = MetadataOverride(
+            title = title.trim().ifBlank { track.title },
+            artist = artist.trim().ifBlank { track.artist },
+            album = album.trim().ifBlank { track.album }
+        )
+        val updatedOverrides = _uiState.value.metadataOverrides.toMutableMap().apply {
+            this[track.id] = sanitized
+        }
+        persistMetadataOverrides(updatedOverrides)
+        runCatching {
+            if (track.contentUri.startsWith("content://")) {
+                app.contentResolver.update(
+                    Uri.parse(track.contentUri),
+                    ContentValues().apply {
+                        put(android.provider.MediaStore.Audio.Media.TITLE, sanitized.title)
+                        put(android.provider.MediaStore.Audio.Media.ARTIST, sanitized.artist)
+                        put(android.provider.MediaStore.Audio.Media.ALBUM, sanitized.album)
+                    },
+                    null,
+                    null
+                )
+            }
+        }
+        _uiState.update { state ->
+            state.copy(
+                metadataOverrides = updatedOverrides,
+                tracks = state.tracks.map { current ->
+                    if (current.id == track.id) {
+                        current.copy(title = sanitized.title, artist = sanitized.artist, album = sanitized.album)
+                    } else {
+                        current
+                    }
+                },
+                infoDialogMessage = app.getString(com.mmusic.app.R.string.metadata_saved)
+            )
+        }
+    }
+
+    fun updateRadioCountry(countryCode: String, countryName: String) {
+        prefs.edit()
+            .putString("radio_country_code", countryCode)
+            .putString("radio_country_name", countryName)
+            .apply()
+        _uiState.update {
+            it.copy(
+                radioCountryCode = countryCode,
+                radioCountryName = countryName,
+                radioLiveDetails = "",
+                showRadioCountryPicker = false
+            )
+        }
+        loadRadioStationsIfConfigured(force = true)
+    }
+
+    fun checkForUpdates(force: Boolean = true) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { fetchLatestReleaseInfo() }.getOrNull()
+            val now = System.currentTimeMillis()
+            prefs.edit().putLong("last_update_check_at", now).apply()
+            if (result == null) {
+                if (force) {
+                    _uiState.update { it.copy(infoDialogMessage = app.getString(com.mmusic.app.R.string.update_check_failed)) }
+                }
+                return@launch
+            }
+            val isNewer = result.version != BuildConfig.VERSION_NAME
+            _uiState.update {
+                it.copy(
+                    updateAvailableVersion = result.version,
+                    updateUrl = result.url,
+                    updateReleaseNotes = result.notes,
+                    updateCheckStatus = if (isNewer) app.getString(com.mmusic.app.R.string.update_available, result.version) else app.getString(com.mmusic.app.R.string.no_update_available),
+                    showUpdateDialog = isNewer && (force || result.version != prefs.getString("last_prompted_update_version", "")),
+                    infoDialogMessage = if (!isNewer && force) app.getString(com.mmusic.app.R.string.no_update_available) else it.infoDialogMessage
+                )
+            }
+            if (isNewer) {
+                prefs.edit().putString("last_prompted_update_version", result.version).apply()
+            }
+        }
+    }
+
     fun connectToServer() {
         val config = _uiState.value.serverConfig
         _uiState.update { it.copy(serverConfig = it.serverConfig.copy(isConnecting = true, statusMessage = "")) }
@@ -656,9 +828,9 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(isScanning = true) }
             val localTracks = runCatching { MediaStoreScanner.scanAudio(app, _uiState.value.sources) }.getOrDefault(emptyList())
             _uiState.update { state ->
-                val remoteTracks = state.tracks.filter { it.sourceType == MusicSourceType.Server }
+                val remoteTracks = state.tracks.filter { it.sourceType == MusicSourceType.Server || it.sourceType == MusicSourceType.Radio }
                 state.copy(
-                    tracks = (localTracks + remoteTracks).distinctBy { it.id },
+                    tracks = (applyMetadataOverrides(localTracks) + remoteTracks).distinctBy { it.id },
                     sources = mergeDiscoveredFolders(state.sources, localTracks),
                     isScanning = false
                 )
@@ -831,7 +1003,6 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         val targetTrack = queue.getOrNull(targetIndex) ?: return
         if (targetTrack.id == _uiState.value.currentTrackId) return
         startTrack(targetTrack)
-        _uiState.update { it.copy(isPlayerFullscreen = true) }
     }
 
     private fun filteredPlayableTracks(): List<MusicTrack> {
@@ -871,7 +1042,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
 
         when (_uiState.value.playbackMode) {
             PlaybackMode.Normal -> playAdjacentTrack(step = 1)
-            PlaybackMode.RepeatOne -> _uiState.value.tracks.firstOrNull { it.id == current.currentTrackId }?.let(::startTrack)
+            PlaybackMode.RepeatOne -> findTrackById(current.currentTrackId)?.let(::startTrack)
             PlaybackMode.Shuffle -> playRandomTrack(currentPlaybackQueue())
         }
     }
@@ -883,7 +1054,6 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         val candidates = queue.filter { it.id != currentId }.ifEmpty { queue }
         val targetTrack = candidates[Random.nextInt(candidates.size)]
         startTrack(targetTrack)
-        _uiState.update { it.copy(isPlayerFullscreen = true) }
     }
 
     private fun startTrack(track: MusicTrack) {
@@ -913,6 +1083,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun isWifiOnlyBlocked(track: MusicTrack): Boolean {
         return track.sourceType == MusicSourceType.Server &&
+            !track.isLocalFile &&
             _uiState.value.serverConfig.wifiOnlyPlayback &&
             !isOnWifiConnection()
     }
@@ -1050,13 +1221,29 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                     _uiState.value.tracks.filter { it.sourceType == MusicSourceType.Server && !it.isLocalFile },
                     _uiState.value.serverConfig.sortOrder
                 )
+            track.sourceType == MusicSourceType.Radio -> filteredRadioTracks()
             else -> filteredPlayableTracks()
         }
     }
 
     private fun currentPlaybackQueue(): List<MusicTrack> {
-        val currentTrack = _uiState.value.tracks.firstOrNull { it.id == _uiState.value.currentTrackId }
+        val currentTrack = findTrackById(_uiState.value.currentTrackId)
         return currentTrack?.let(::queueForTrack) ?: filteredPlayableTracks()
+    }
+
+    private fun findTrackById(trackId: String?): MusicTrack? {
+        if (trackId.isNullOrBlank()) return null
+        return _uiState.value.tracks.firstOrNull { it.id == trackId }
+            ?: _uiState.value.radioStations.firstOrNull { it.id == trackId }
+    }
+
+    private fun filteredRadioTracks(): List<MusicTrack> {
+        val query = _uiState.value.radioSearchQuery.trim()
+        return _uiState.value.radioStations.filter { track ->
+            query.isBlank() || listOf(track.title, track.artist, track.album).any { value ->
+                value.contains(query, ignoreCase = true)
+            }
+        }
     }
 
     private fun sortServerTracks(tracks: List<MusicTrack>, sortOrder: ServerSortOrder): List<MusicTrack> {
@@ -1427,6 +1614,194 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         }.getOrDefault(false)
     }
 
+    private fun restoreFavoriteTrackIds(): Set<String> {
+        return prefs.getStringSet("favorite_track_ids", emptySet()).orEmpty()
+    }
+
+    private fun restoreMetadataOverrides(): Map<String, MetadataOverride> {
+        val raw = prefs.getString("metadata_overrides", "").orEmpty()
+        if (raw.isBlank()) return emptyMap()
+        return runCatching {
+            val json = JSONObject(raw)
+            json.keys().asSequence().associateWith { key ->
+                val item = json.getJSONObject(key)
+                MetadataOverride(
+                    title = item.optString("title"),
+                    artist = item.optString("artist"),
+                    album = item.optString("album")
+                )
+            }
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun persistMetadataOverrides(overrides: Map<String, MetadataOverride>) {
+        val json = JSONObject()
+        overrides.forEach { (id, metadata) ->
+            json.put(
+                id,
+                JSONObject().apply {
+                    put("title", metadata.title)
+                    put("artist", metadata.artist)
+                    put("album", metadata.album)
+                }
+            )
+        }
+        prefs.edit().putString("metadata_overrides", json.toString()).apply()
+    }
+
+    private fun applyMetadataOverrides(tracks: List<MusicTrack>): List<MusicTrack> {
+        val overrides = _uiState.value.metadataOverrides
+        return tracks.map { track ->
+            val override = overrides[track.id] ?: return@map track
+            track.copy(
+                title = override.title.ifBlank { track.title },
+                artist = override.artist.ifBlank { track.artist },
+                album = override.album.ifBlank { track.album }
+            )
+        }
+    }
+
+    private fun releaseNotesForCurrentVersion(): AppReleaseNotes {
+        return AppReleaseNotes(
+            version = BuildConfig.VERSION_NAME,
+            pages = listOf(
+                app.getString(com.mmusic.app.R.string.release_notes_page_1),
+                app.getString(com.mmusic.app.R.string.release_notes_page_2),
+                app.getString(com.mmusic.app.R.string.release_notes_page_3)
+            )
+        )
+    }
+
+    private fun shouldShowReleaseNotesDialog(): Boolean {
+        return prefs.getString("last_seen_release_notes_version", "") != BuildConfig.VERSION_NAME
+    }
+
+    private fun maybeCheckForUpdatesOnLaunch() {
+        val lastCheckAt = prefs.getLong("last_update_check_at", 0L)
+        val fiveDaysMs = 5L * 24L * 60L * 60L * 1000L
+        if (System.currentTimeMillis() - lastCheckAt >= fiveDaysMs) {
+            checkForUpdates(force = false)
+        }
+    }
+
+    private fun loadRadioStationsIfConfigured(force: Boolean = false) {
+        val countryCode = _uiState.value.radioCountryCode.ifBlank { return }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!force && _uiState.value.radioStations.isNotEmpty()) return@launch
+            _uiState.update { it.copy(isLoadingRadio = true, radioLiveDetails = "") }
+            val tracks = runCatching { fetchRadioStations(countryCode) }.getOrDefault(emptyList())
+            _uiState.update {
+                it.copy(
+                    radioStations = tracks,
+                    tracks = (it.tracks.filterNot { track -> track.sourceType == MusicSourceType.Radio } + tracks).distinctBy(MusicTrack::id),
+                    isLoadingRadio = false
+                )
+            }
+        }
+    }
+
+    private fun fetchRadioStations(countryCode: String): List<MusicTrack> {
+        val encodedCountry = URLEncoder.encode(countryCode, StandardCharsets.UTF_8.name())
+        val endpoint = "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/$encodedCountry?hidebroken=true&order=votes&reverse=true&limit=80"
+        val body = openConnection(endpoint).inputStream.bufferedReader().use { it.readText() }
+        val json = JSONArray(body)
+        return buildList {
+            for (index in 0 until json.length()) {
+                val item = json.optJSONObject(index) ?: continue
+                val uuid = item.optString("stationuuid")
+                if (uuid.isBlank()) continue
+                val name = item.optString("name")
+                if (name.isBlank()) continue
+                val streamUrl = item.optString("url_resolved").ifBlank { item.optString("url") }
+                if (streamUrl.isBlank()) continue
+                val favicon = item.optString("favicon").ifBlank { null }
+                val tags = item.optString("tags")
+                    .split(',')
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+                    .distinct()
+                    .joinToString(", ")
+                val language = item.optString("language").trim()
+                val codec = item.optString("codec").trim()
+                val bitrate = item.optInt("bitrate").takeIf { it > 0 }?.let { "$it kbps" }.orEmpty()
+                val programInfo = buildList {
+                    if (tags.isNotBlank()) add(tags)
+                    if (language.isNotBlank()) add(language)
+                    if (codec.isNotBlank() || bitrate.isNotBlank()) {
+                        add(listOf(codec, bitrate).filter { it.isNotBlank() }.joinToString(" • "))
+                    }
+                }.joinToString(" | ").ifBlank { app.getString(com.mmusic.app.R.string.radio_live_label) }
+                add(
+                    MusicTrack(
+                        id = "radio_$uuid",
+                        title = name,
+                        artist = _uiState.value.radioCountryName.ifBlank { countryCode },
+                        album = programInfo,
+                        artworkUri = favicon,
+                        folder = "/radio/$countryCode",
+                        sourceType = MusicSourceType.Radio,
+                        duration = "LIVE",
+                        durationMs = 0L,
+                        streamUrl = streamUrl,
+                        contentUri = streamUrl,
+                        isLocalFile = false
+                    )
+                )
+            }
+        }
+    }
+
+    private fun refreshRadioLiveDetails(track: MusicTrack) {
+        if (track.sourceType != MusicSourceType.Radio) {
+            _uiState.update { it.copy(radioLiveDetails = "") }
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val details = runCatching {
+                val connection = openConnection(track.streamUrl).apply {
+                    setRequestProperty("Icy-MetaData", "1")
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                }
+                val headerDetails = listOf(
+                    connection.getHeaderField("icy-description"),
+                    connection.getHeaderField("icy-genre"),
+                    connection.getHeaderField("icy-name")
+                ).mapNotNull { value -> value?.trim()?.takeIf { it.isNotBlank() } }
+                    .distinct()
+                    .joinToString(" | ")
+                connection.disconnect()
+                headerDetails
+            }.getOrDefault("")
+            _uiState.update { state ->
+                if (state.currentTrackId != track.id) state
+                else state.copy(radioLiveDetails = details.ifBlank { track.album })
+            }
+        }
+    }
+
+    private data class LatestReleaseInfo(
+        val version: String,
+        val url: String,
+        val notes: String
+    )
+
+    private fun fetchLatestReleaseInfo(): LatestReleaseInfo {
+        val endpoint = "https://api.github.com/repos/adamtechhu/m-music/releases/latest"
+        val connection = openConnection(endpoint).apply {
+            setRequestProperty("Accept", "application/vnd.github+json")
+            setRequestProperty("X-GitHub-Api-Version", "2022-11-28")
+        }
+        val body = connection.inputStream.bufferedReader().use { it.readText() }
+        connection.disconnect()
+        val json = JSONObject(body)
+        return LatestReleaseInfo(
+            version = json.optString("tag_name").ifBlank { json.optString("name").ifBlank { BuildConfig.VERSION_NAME } }.removePrefix("v"),
+            url = json.optString("html_url"),
+            notes = json.optString("body")
+        )
+    }
+
     override fun onCleared() {
         runCatching { connectivityManager?.unregisterNetworkCallback(networkCallback) }
         super.onCleared()
@@ -1462,6 +1837,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
             readTimeout = 6000
             requestMethod = "GET"
             instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "M-Music/${BuildConfig.VERSION_NAME}")
             if (user.isNotBlank() || password.isNotBlank()) {
                 val auth = Base64.getEncoder().encodeToString("$user:$password".toByteArray())
                 setRequestProperty("Authorization", "Basic $auth")

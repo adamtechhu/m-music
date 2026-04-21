@@ -110,6 +110,8 @@ class MainActivity : ComponentActivity() {
                     onBottomBarCompactChanged = viewModel::setBottomBarCompact,
                     onBottomBarLabelsChanged = viewModel::setBottomBarShowLabels,
                     onBottomBarGlowChanged = viewModel::setBottomBarActiveGlow,
+                    onShowServerTabChanged = viewModel::setShowServerTab,
+                    onShowRadioTabChanged = viewModel::setShowRadioTab,
                     onAudioOutputModeSelected = viewModel::selectAudioOutputMode,
                     onEqualizerPresetSelected = viewModel::selectEqualizerPreset,
                     onBassChanged = viewModel::updateEqualizerBass,
@@ -132,6 +134,17 @@ class MainActivity : ComponentActivity() {
                     onServerBitrateChanged = viewModel::setServerBitrateKbps,
                     onConnectToServer = viewModel::connectToServer,
                     onDownloadServerTrack = viewModel::downloadServerTrack,
+                    onToggleFavorite = viewModel::toggleFavorite,
+                    onUpdateMetadata = viewModel::updateTrackMetadata,
+                    onCheckForUpdates = { viewModel.checkForUpdates(force = true) },
+                    onOpenRadioCountryPicker = viewModel::openRadioCountryPicker,
+                    onRadioSearchQueryChanged = viewModel::updateRadioSearchQuery,
+                    onShowRadioMetadataChanged = viewModel::setShowRadioMetadata,
+                    onRadioCountrySelected = viewModel::updateRadioCountry,
+                    onDismissRadioCountryPicker = viewModel::dismissRadioCountryPicker,
+                    onDismissReleaseNotesDialog = viewModel::dismissReleaseNotesDialog,
+                    onShowReleaseNotes = viewModel::showReleaseNotesDialog,
+                    onDismissUpdateDialog = viewModel::dismissUpdateDialog,
                     onAcceptWelcome = viewModel::acceptWelcomeDialog
                 )
             }

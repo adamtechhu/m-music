@@ -107,6 +107,8 @@ fun MMusicApp(
     onBottomBarCompactChanged: (Boolean) -> Unit,
     onBottomBarLabelsChanged: (Boolean) -> Unit,
     onBottomBarGlowChanged: (Boolean) -> Unit,
+    onShowServerTabChanged: (Boolean) -> Unit,
+    onShowRadioTabChanged: (Boolean) -> Unit,
     onAudioOutputModeSelected: (AudioOutputMode) -> Unit,
     onEqualizerPresetSelected: (AudioOutputMode, EqualizerPreset) -> Unit,
     onBassChanged: (AudioOutputMode, Float) -> Unit,
@@ -129,9 +131,21 @@ fun MMusicApp(
     onServerBitrateChanged: (Int) -> Unit,
     onConnectToServer: () -> Unit,
     onDownloadServerTrack: (MusicTrack) -> Unit,
+    onToggleFavorite: (MusicTrack) -> Unit,
+    onUpdateMetadata: (MusicTrack, String, String, String) -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onOpenRadioCountryPicker: () -> Unit,
+    onRadioSearchQueryChanged: (String) -> Unit,
+    onShowRadioMetadataChanged: (Boolean) -> Unit,
+    onRadioCountrySelected: (String, String) -> Unit,
+    onDismissRadioCountryPicker: () -> Unit,
+    onDismissReleaseNotesDialog: () -> Unit,
+    onShowReleaseNotes: () -> Unit,
+    onDismissUpdateDialog: () -> Unit,
     onAcceptWelcome: () -> Unit
 ) {
     val currentTrack = state.tracks.firstOrNull { it.id == state.currentTrackId }
+        ?: state.radioStations.firstOrNull { it.id == state.currentTrackId }
     Scaffold(
         topBar = {
             if (!state.isPlayerFullscreen) {
@@ -158,6 +172,8 @@ fun MMusicApp(
                     }
                     ModernBottomBar(
                         selectedTab = state.selectedTab,
+                        showServerTab = state.showServerTab,
+                        showRadioTab = state.showRadioTab,
                         size = state.bottomBarSize,
                         floating = state.bottomBarFloating,
                         glass = state.bottomBarGlass,
@@ -178,16 +194,32 @@ fun MMusicApp(
         ) {
             if (state.selectedTab == AppTab.Player) {
                 PlayerTab(state, currentTrack, onCategorySelected, onSourceFilterSelected, onSearchQueryChanged, onTrackSelected, onOpenDrilldown, onClearDrilldown, onToggleCurrentPlayback, onPlaybackModeSelected, onPlayPrevious, onPlayNext, onOpenFullscreenPlayer, onStopPlayback, onSeekTo)
+            } else if (state.selectedTab == AppTab.Radio) {
+                RadioTab(state, onTrackSelected, onOpenRadioCountryPicker, onRadioSearchQueryChanged)
             } else if (state.selectedTab == AppTab.Server) {
                 ServerTab(state, onDismissServerInfo, onTrackSelected, onDownloadServerTrack)
             } else {
-                SettingsTab(state, onStyleSelected, onDarkModeLevelSelected, onPlayerStyleSelected, onBottomBarSizeSelected, onBottomBarFloatingChanged, onBottomBarGlassChanged, onBottomBarCompactChanged, onBottomBarLabelsChanged, onBottomBarGlowChanged, onAudioOutputModeSelected, onEqualizerPresetSelected, onBassChanged, onMidChanged, onTrebleChanged, onBassBoostChanged, onSurroundChanged, onLoudnessChanged, onShowPlaybackProgressChanged, onRefreshSources, onToggleSourceEnabled, onFolderEnabledChanged, onSourceFolderChanged, onSourceFolderToggled, onSourceFormatToggled, onSourceDurationFilterSelected, onServerEndpointChanged, onServerTypeChanged, onServerUserChanged, onServerPasswordChanged, onServerDownloadStorageChanged, onServerSortOrderChanged, onDeleteDownloadedFiles, onServerWifiOnlyChanged, onServerDataSaverChanged, onServerOriginalQualityChanged, onServerBitrateChanged, onConnectToServer)
+                SettingsTab(state, onStyleSelected, onDarkModeLevelSelected, onPlayerStyleSelected, onBottomBarSizeSelected, onBottomBarFloatingChanged, onBottomBarGlassChanged, onBottomBarCompactChanged, onBottomBarLabelsChanged, onBottomBarGlowChanged, onShowServerTabChanged, onShowRadioTabChanged, onAudioOutputModeSelected, onEqualizerPresetSelected, onBassChanged, onMidChanged, onTrebleChanged, onBassBoostChanged, onSurroundChanged, onLoudnessChanged, onShowPlaybackProgressChanged, onRefreshSources, onToggleSourceEnabled, onFolderEnabledChanged, onSourceFolderChanged, onSourceFolderToggled, onSourceFormatToggled, onSourceDurationFilterSelected, onServerEndpointChanged, onServerTypeChanged, onServerUserChanged, onServerPasswordChanged, onServerDownloadStorageChanged, onServerSortOrderChanged, onDeleteDownloadedFiles, onServerWifiOnlyChanged, onServerDataSaverChanged, onServerOriginalQualityChanged, onServerBitrateChanged, onConnectToServer, onCheckForUpdates, onShowReleaseNotes, onOpenRadioCountryPicker, onShowRadioMetadataChanged)
             }
-            if (state.isPlayerFullscreen && currentTrack != null) FullscreenPlayer(state, currentTrack, onCloseFullscreenPlayer, onToggleCurrentPlayback, onSeekTo, onPlaybackModeSelected, onPlayPrevious, onPlayNext, onStopPlayback, onDownloadServerTrack)
+            if (state.isPlayerFullscreen && currentTrack != null) FullscreenPlayer(state, currentTrack, onCloseFullscreenPlayer, onToggleCurrentPlayback, onSeekTo, onPlaybackModeSelected, onPlayPrevious, onPlayNext, onStopPlayback, onDownloadServerTrack, onToggleFavorite, onUpdateMetadata)
             if (state.showWelcomeDialog) WelcomeDialog(onAcceptWelcome)
             if (state.isScanning) ScanDialog()
             state.infoDialogMessage?.let { message ->
                 InfoDialog(message = message, onDismiss = onDismissInfoDialog)
+            }
+            if (state.showRadioCountryPicker) {
+                RadioCountryDialog(onSelect = onRadioCountrySelected, onDismiss = onDismissRadioCountryPicker)
+            }
+            if (state.showReleaseNotesDialog) {
+                ReleaseNotesDialog(state.releaseNotes, onDismissReleaseNotesDialog)
+            }
+            if (state.showUpdateDialog) {
+                UpdateAvailableDialog(
+                    version = state.updateAvailableVersion.orEmpty(),
+                    notes = state.updateReleaseNotes,
+                    url = state.updateUrl,
+                    onDismiss = onDismissUpdateDialog
+                )
             }
             PlaybackModeFeedback(state.playbackMode)
         }
@@ -263,9 +295,17 @@ private fun PlayerTab(
     onSeekTo: (Long) -> Unit
 ) {
     val localSourceTypes = setOf(MusicSourceType.Internal, MusicSourceType.SdCard, MusicSourceType.UsbOtg)
+    val libraryTracks = state.tracks.filter { it.sourceType in (localSourceTypes + MusicSourceType.Server) }
     val enabledTypes = state.sources.filter { it.enabled && it.type in localSourceTypes }.map { it.type }.toSet()
-    val filtered = state.tracks.filter { it.sourceType in localSourceTypes }
+    val allFolders = libraryTracks
+        .filter { it.sourceType in localSourceTypes }
+        .map { it.folder }
+        .distinct()
+        .sorted()
+    val filtered = libraryTracks
+        .filter { it.sourceType == MusicSourceType.Server || it.sourceType in localSourceTypes }
         .filter { enabledTypes.isEmpty() || it.sourceType in enabledTypes }
+        .filter { state.selectedCategory != LibraryCategory.Favorites || it.id in state.favoriteTrackIds }
         .filter { state.selectedSourceFilter == null || it.sourceType == state.selectedSourceFilter }
         .filter { q ->
             val s = state.librarySearchQuery.trim()
@@ -289,10 +329,22 @@ private fun PlayerTab(
         }
         item { ChipRow { LibraryCategory.entries.forEach { FilterChip(selected = state.selectedCategory == it, onClick = { onCategorySelected(it) }, label = { Text(stringResource(it.titleRes)) }) } } }
         item { ChipRow { FilterChip(selected = state.selectedSourceFilter == null, onClick = { onSourceFilterSelected(null) }, label = { Text(stringResource(R.string.all_sources)) }); state.sources.filter { it.enabled && it.type in localSourceTypes }.forEach { src -> FilterChip(selected = state.selectedSourceFilter == src.type, onClick = { onSourceFilterSelected(src.type) }, label = { Text(stringResource(src.type.titleRes)) }) } } }
+        if (state.libraryDrilldown?.type == DrilldownType.Folder && allFolders.isNotEmpty()) item {
+            ChipRow {
+                allFolders.forEach { folder ->
+                    FilterChip(
+                        selected = state.libraryDrilldown.value == folder,
+                        onClick = { onOpenDrilldown(DrilldownType.Folder, folder) },
+                        label = { Text(folder) }
+                    )
+                }
+            }
+        }
         if (!state.hasMediaPermission) item { InfoCard(Icons.Rounded.LibraryMusic, stringResource(R.string.media_permission_needed), stringResource(R.string.media_permission_needed)) }
         if (state.hasMediaPermission && filtered.isEmpty()) item { InfoCard(Icons.Rounded.LibraryMusic, stringResource(R.string.no_music_found), stringResource(R.string.no_music_found_hint)) }
         when (state.selectedCategory) {
             LibraryCategory.AllMusic -> items(filtered) { TrackRow(it, state.currentTrackId == it.id, state.currentTrackId == it.id && state.isPlaying, state.currentTrackId == it.id && state.isLoadingPlayback) { onTrackSelected(it) } }
+            LibraryCategory.Favorites -> items(filtered) { TrackRow(it, state.currentTrackId == it.id, state.currentTrackId == it.id && state.isPlaying, state.currentTrackId == it.id && state.isLoadingPlayback) { onTrackSelected(it) } }
             LibraryCategory.Artists -> items(filtered.groupBy { it.artist }.toList()) { (artist, tracks) -> GroupRow(artist, "${tracks.size} | ${tracks.joinToString { it.title }}", Icons.Rounded.Person) { onOpenDrilldown(DrilldownType.Artist, artist) } }
             LibraryCategory.Albums -> items(filtered.groupBy { it.album }.toList()) { (album, tracks) -> GroupRow(album, "${tracks.first().artist} | ${tracks.size}", Icons.Rounded.Album) { onOpenDrilldown(DrilldownType.Album, album) } }
             LibraryCategory.Folders -> items(filtered.groupBy { it.folder }.toList()) { (folder, tracks) -> GroupRow(folder, "${stringResource(tracks.first().sourceType.titleRes)} | ${tracks.size}", Icons.Rounded.Folder) { onOpenDrilldown(DrilldownType.Folder, folder) } }
@@ -313,6 +365,8 @@ private fun SettingsTab(
     onBottomBarCompactChanged: (Boolean) -> Unit,
     onBottomBarLabelsChanged: (Boolean) -> Unit,
     onBottomBarGlowChanged: (Boolean) -> Unit,
+    onShowServerTabChanged: (Boolean) -> Unit,
+    onShowRadioTabChanged: (Boolean) -> Unit,
     onAudioOutputModeSelected: (AudioOutputMode) -> Unit,
     onEqualizerPresetSelected: (AudioOutputMode, EqualizerPreset) -> Unit,
     onBassChanged: (AudioOutputMode, Float) -> Unit,
@@ -340,7 +394,11 @@ private fun SettingsTab(
     onServerDataSaverChanged: (Boolean) -> Unit,
     onServerOriginalQualityChanged: (Boolean) -> Unit,
     onServerBitrateChanged: (Int) -> Unit,
-    onConnectToServer: () -> Unit
+    onConnectToServer: () -> Unit,
+    onCheckForUpdates: () -> Unit,
+    onShowReleaseNotes: () -> Unit,
+    onOpenRadioCountryPicker: () -> Unit,
+    onShowRadioMetadataChanged: (Boolean) -> Unit
 ) {
     var selectedSection by remember { mutableStateOf("appearance") }
     val extraDarkEnabled = state.uiStyle == UiStyle.Base
@@ -404,6 +462,10 @@ private fun SettingsTab(
                 SettingRow(stringResource(R.string.bottom_bar_show_labels), state.bottomBarShowLabels, onBottomBarLabelsChanged)
                 Spacer(Modifier.height(8.dp))
                 SettingRow(stringResource(R.string.bottom_bar_active_glow), state.bottomBarActiveGlow, onBottomBarGlowChanged)
+                Spacer(Modifier.height(8.dp))
+                SettingRow(stringResource(R.string.show_server_tab), state.showServerTab, onShowServerTabChanged)
+                Spacer(Modifier.height(8.dp))
+                SettingRow(stringResource(R.string.show_radio_tab), state.showRadioTab, onShowRadioTabChanged)
                 Spacer(Modifier.height(10.dp))
                 SettingRow(stringResource(R.string.show_playback_progress), state.showPlaybackProgress, onShowPlaybackProgressChanged)
             }
@@ -703,10 +765,41 @@ private fun SettingsTab(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.height(8.dp))
             Button(onClick = onConnectToServer, enabled = !state.serverConfig.isConnecting) { Text(if (state.serverConfig.isConnecting) stringResource(R.string.server_connecting) else stringResource(R.string.server_connect_action)) }
             Spacer(Modifier.height(6.dp))
             Text(if (state.serverConfig.statusMessage.isBlank()) stringResource(R.string.server_support_hint) else state.serverConfig.statusMessage, color = if (state.serverConfig.connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        } } }
+
+        item {
+            SettingsEntry(
+                title = stringResource(R.string.settings_radio),
+                icon = Icons.Rounded.Radio,
+                selected = selectedSection == "radio",
+                onClick = { selectedSection = "radio" }
+            )
+        }
+        item { SettingsSection(visible = selectedSection == "radio") { Block {
+            Text(stringResource(R.string.radio_settings_title), fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenRadioCountryPicker) {
+                Icon(Icons.Rounded.Public, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (state.radioCountryName.isBlank()) {
+                        stringResource(R.string.radio_country_select)
+                    } else {
+                        stringResource(R.string.radio_country_current, state.radioCountryName)
+                    }
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+            SettingRow(stringResource(R.string.radio_metadata_toggle), state.showRadioMetadata, onShowRadioMetadataChanged)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                stringResource(R.string.radio_settings_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         } } }
 
         item {
@@ -769,6 +862,24 @@ private fun SettingsTab(
                 onClick = {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/@Adam_techhu")))
                 }
+            )
+            Spacer(Modifier.height(12.dp))
+            AboutLinkCard(
+                icon = Icons.Rounded.SystemUpdate,
+                title = stringResource(R.string.check_updates_title),
+                description = if (state.updateCheckStatus.isBlank()) stringResource(R.string.check_updates_description) else state.updateCheckStatus,
+                actionLabel = stringResource(R.string.check_updates_action),
+                accent = MaterialTheme.colorScheme.secondaryContainer,
+                onClick = onCheckForUpdates
+            )
+            Spacer(Modifier.height(10.dp))
+            AboutLinkCard(
+                icon = Icons.Rounded.OpenInNew,
+                title = stringResource(R.string.release_notes_title),
+                description = stringResource(R.string.release_notes_description),
+                actionLabel = stringResource(R.string.open_release_notes),
+                accent = MaterialTheme.colorScheme.tertiaryContainer,
+                onClick = onShowReleaseNotes
             )
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.version_label), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -846,6 +957,8 @@ private fun SettingsEntry(title: String, icon: ImageVector, selected: Boolean, o
 @Composable
 private fun ModernBottomBar(
     selectedTab: AppTab,
+    showServerTab: Boolean,
+    showRadioTab: Boolean,
     size: BottomBarSize,
     floating: Boolean,
     glass: Boolean,
@@ -854,6 +967,13 @@ private fun ModernBottomBar(
     glow: Boolean,
     onTabSelected: (AppTab) -> Unit
 ) {
+    val visibleTabs = AppTab.entries.filter { tab ->
+        when (tab) {
+            AppTab.Player, AppTab.Settings -> true
+            AppTab.Server -> showServerTab
+            AppTab.Radio -> showRadioTab
+        }
+    }
     val sizeScale = when (size) {
         BottomBarSize.Small -> 0.88f
         BottomBarSize.Medium -> 1f
@@ -884,7 +1004,7 @@ private fun ModernBottomBar(
                 .padding(horizontal = ((if (compact) 6 else 10) * sizeScale).dp, vertical = ((if (compact) 6 else 10) * sizeScale).dp),
             horizontalArrangement = Arrangement.spacedBy(((if (compact) 6 else 10) * sizeScale).dp)
         ) {
-            AppTab.entries.forEach { tab ->
+            visibleTabs.forEach { tab ->
                 val selected = tab == selectedTab
                 val accent = MaterialTheme.colorScheme.primary
                 val pillColor = if (selected) accent.copy(alpha = if (glass) 0.22f else 0.18f) else Color.Transparent
@@ -917,6 +1037,7 @@ private fun ModernBottomBar(
                             Icon(
                                 imageVector = when (tab) {
                                     AppTab.Player -> Icons.Rounded.PlayArrow
+                                    AppTab.Radio -> Icons.Rounded.Radio
                                     AppTab.Server -> Icons.Rounded.Router
                                     AppTab.Settings -> Icons.Rounded.Settings
                                 },
@@ -1242,6 +1363,258 @@ private fun ServerTab(state: MMusicUiState, onDismiss: () -> Unit, onTrackSelect
 }
 
 @Composable
+private fun RadioTab(
+    state: MMusicUiState,
+    onTrackSelected: (MusicTrack) -> Unit,
+    onOpenCountryPicker: () -> Unit,
+    onRadioSearchQueryChanged: (String) -> Unit
+) {
+    val visibleStations = state.radioStations.filter { track ->
+        val query = state.radioSearchQuery.trim()
+        query.isBlank() || listOf(track.title, track.artist, track.album).any { value ->
+            value.contains(query, ignoreCase = true)
+        }
+    }
+    val currentRadioTrack = state.radioStations.firstOrNull { it.id == state.currentTrackId }
+    LazyColumn(contentPadding = PaddingValues(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            OutlinedButton(onClick = onOpenCountryPicker) {
+                Icon(Icons.Rounded.Public, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (state.radioCountryName.isBlank()) {
+                        stringResource(R.string.radio_country_select)
+                    } else {
+                        stringResource(R.string.radio_country_current, state.radioCountryName)
+                    }
+                )
+            }
+        }
+        item {
+            OutlinedTextField(
+                value = state.radioSearchQuery,
+                onValueChange = onRadioSearchQueryChanged,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(R.string.radio_search)) },
+                leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                singleLine = true
+            )
+        }
+        if (state.showRadioMetadata && currentRadioTrack != null) {
+            item {
+                InfoCard(
+                    Icons.Rounded.Equalizer,
+                    stringResource(R.string.radio_now_playing_title),
+                    state.radioLiveDetails.ifBlank { currentRadioTrack.album.ifBlank { stringResource(R.string.radio_metadata_unavailable) } }
+                )
+            }
+        }
+        if (state.isLoadingRadio) {
+            item {
+                InfoCard(Icons.Rounded.Radio, stringResource(R.string.radio_loading_title), stringResource(R.string.radio_loading_message))
+            }
+        } else if (state.radioStations.isEmpty()) {
+            item {
+                InfoCard(Icons.Rounded.Radio, stringResource(R.string.radio_tab), stringResource(R.string.radio_empty_message))
+            }
+        } else if (visibleStations.isEmpty()) {
+            item {
+                InfoCard(Icons.Rounded.SearchOff, stringResource(R.string.radio_search), stringResource(R.string.radio_search_empty))
+            }
+        } else {
+            items(visibleStations) { track ->
+                RadioStationRow(
+                    track = track,
+                    showMetadata = state.showRadioMetadata,
+                    isCurrent = state.currentTrackId == track.id,
+                    isPlaying = state.currentTrackId == track.id && state.isPlaying,
+                    isLoading = state.currentTrackId == track.id && state.isLoadingPlayback,
+                    onClick = { onTrackSelected(track) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RadioStationRow(
+    track: MusicTrack,
+    showMetadata: Boolean,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    isLoading: Boolean,
+    onClick: () -> Unit
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 6.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            Modifier
+                .size(42.dp)
+                .background(
+                    if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    RoundedCornerShape(12.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (track.artworkUri != null) {
+                AsyncImage(model = track.artworkUri, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            } else {
+                Icon(if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.Radio, null)
+            }
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(track.title, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium, style = MaterialTheme.typography.titleMedium)
+            Text(track.artist, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (showMetadata) {
+                Text(
+                    text = track.album.ifBlank { stringResource(R.string.radio_metadata_unavailable) },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
+                )
+            }
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text(track.duration, style = MaterialTheme.typography.labelMedium)
+            Text(
+                if (isLoading) stringResource(R.string.player_loading_short) else stringResource(R.string.radio_live_label),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
+}
+
+@Composable
+private fun RadioCountryDialog(
+    onSelect: (String, String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val countries = listOf(
+        "HU" to "Magyarország",
+        "DE" to "Deutschland",
+        "ES" to "España",
+        "GB" to "United Kingdom",
+        "US" to "United States",
+        "FR" to "France",
+        "IT" to "Italia",
+        "AT" to "Österreich"
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+        title = { Text(stringResource(R.string.radio_country_dialog_title)) },
+        text = {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(countries) { (code, name) ->
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = { onSelect(code, name) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    ) {
+                        Text(name, modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp))
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun ReleaseNotesDialog(notes: AppReleaseNotes, onDismiss: () -> Unit) {
+    var page by remember(notes.version) { mutableStateOf(0) }
+    val pages = notes.pages.ifEmpty { listOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.release_notes_header, notes.version)) },
+        text = { Text(pages[page]) },
+        confirmButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (page > 0) {
+                    TextButton(onClick = { page -= 1 }) { Text(stringResource(R.string.previous_page)) }
+                }
+                if (page < pages.lastIndex) {
+                    TextButton(onClick = { page += 1 }) { Text(stringResource(R.string.next_page)) }
+                } else {
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.onboarding_ok)) }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun UpdateAvailableDialog(
+    version: String,
+    notes: String,
+    url: String?,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.update_available, version)) },
+        text = { Text(notes.ifBlank { stringResource(R.string.check_updates_description) }) },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (!url.isNullOrBlank()) {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                    onDismiss()
+                }
+            ) { Text(stringResource(R.string.open_link)) }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+        }
+    )
+}
+
+@Composable
+private fun MetadataEditDialog(
+    track: MusicTrack,
+    onDismiss: () -> Unit,
+    onSave: (String, String, String) -> Unit
+) {
+    var title by remember(track.id) { mutableStateOf(track.title) }
+    var artist by remember(track.id) { mutableStateOf(track.artist) }
+    var album by remember(track.id) { mutableStateOf(track.album) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.edit_metadata_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(value = title, onValueChange = { title = it }, label = { Text(stringResource(R.string.metadata_title_label)) })
+                OutlinedTextField(value = artist, onValueChange = { artist = it }, label = { Text(stringResource(R.string.metadata_artist_label)) })
+                OutlinedTextField(value = album, onValueChange = { album = it }, label = { Text(stringResource(R.string.metadata_album_label)) })
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(title, artist, album) }) {
+                Text(stringResource(R.string.save_action))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+        }
+    )
+}
+
+@Composable
 private fun FullscreenPlayer(
     state: MMusicUiState,
     track: MusicTrack,
@@ -1252,7 +1625,9 @@ private fun FullscreenPlayer(
     onPrevious: () -> Unit,
     onNext: () -> Unit,
     onStop: () -> Unit,
-    onDownloadTrack: (MusicTrack) -> Unit
+    onDownloadTrack: (MusicTrack) -> Unit,
+    onToggleFavorite: (MusicTrack) -> Unit,
+    onUpdateMetadata: (MusicTrack, String, String, String) -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
     val configuration = LocalConfiguration.current
@@ -1263,6 +1638,7 @@ private fun FullscreenPlayer(
     var showTopMenu by remember { mutableStateOf(false) }
     var showServerShareDialog by remember { mutableStateOf(false) }
     var showDiscoDialog by remember { mutableStateOf(false) }
+    var showMetadataDialog by remember { mutableStateOf(false) }
     var discoEnabled by remember { mutableStateOf(false) }
     var pendingDiscoEnable by remember { mutableStateOf(false) }
     val latestIsPlaying by rememberUpdatedState(state.isPlaying)
@@ -1365,6 +1741,29 @@ private fun FullscreenPlayer(
                     expanded = showTopMenu,
                     onDismissRequest = { showTopMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text(if (track.id in state.favoriteTrackIds) stringResource(R.string.remove_favorite) else stringResource(R.string.add_favorite)) },
+                        leadingIcon = {
+                            Icon(
+                                if (track.id in state.favoriteTrackIds) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = null
+                            )
+                        },
+                        onClick = {
+                            showTopMenu = false
+                            onToggleFavorite(track)
+                        }
+                    )
+                    if (track.isLocalFile && track.sourceType != MusicSourceType.Server) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.edit_metadata_title)) },
+                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                            onClick = {
+                                showTopMenu = false
+                                showMetadataDialog = true
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.share_track)) },
                         leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) },
@@ -1470,10 +1869,41 @@ private fun FullscreenPlayer(
                 )
             }
             Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                val isRadioTrack = track.sourceType == MusicSourceType.Radio
+                val radioProgramInfo = if (isRadioTrack) {
+                    track.album.ifBlank { stringResource(R.string.radio_metadata_unavailable) }
+                } else {
+                    ""
+                }
+                val radioSongInfo = if (isRadioTrack) {
+                    state.radioLiveDetails
+                        .takeIf { it.isNotBlank() && it != track.album && it != stringResource(R.string.radio_metadata_unavailable) }
+                        .orEmpty()
+                } else {
+                    ""
+                }
                 ArtworkBox(track.artworkUri, Modifier.fillMaxWidth().height(320.dp))
                 Text(track.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("${track.artist} | ${track.album}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("${stringResource(track.sourceType.titleRes)} | ${track.folder}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (isRadioTrack) {
+                    Text(
+                        text = radioProgramInfo,
+                        color = Color(0xFF3DA5FF),
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (radioSongInfo.isNotBlank()) {
+                        Text(
+                            text = radioSongInfo,
+                            color = Color(0xFFFF5A5A),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Text(track.folder, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("${track.artist} | ${track.album}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${stringResource(track.sourceType.titleRes)} | ${track.folder}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 if (state.showPlaybackProgress) {
                     PlaybackProgress(state.playbackPositionMs, state.playbackDurationMs, state.playerStyle, onSeekTo)
                 }
@@ -1500,6 +1930,16 @@ private fun FullscreenPlayer(
             },
             title = { Text(stringResource(R.string.server_share_blocked_title)) },
             text = { Text(stringResource(R.string.server_share_blocked_message)) }
+        )
+    }
+    if (showMetadataDialog) {
+        MetadataEditDialog(
+            track = track,
+            onDismiss = { showMetadataDialog = false },
+            onSave = { title, artist, album ->
+                showMetadataDialog = false
+                onUpdateMetadata(track, title, artist, album)
+            }
         )
     }
     if (showDiscoDialog) {
@@ -1712,6 +2152,7 @@ private fun iconForSource(source: MusicSourceType): ImageVector = when (source) 
     MusicSourceType.SdCard -> Icons.Rounded.SdStorage
     MusicSourceType.UsbOtg -> Icons.Rounded.Usb
     MusicSourceType.Server -> Icons.Rounded.Router
+    MusicSourceType.Radio -> Icons.Rounded.Radio
 }
 
 private fun formatTime(valueMs: Long): String {
@@ -1775,4 +2216,5 @@ private fun sourceSubtitle(source: SourceConfig): String = when (source.type) {
     MusicSourceType.SdCard -> stringResource(R.string.sd_source_summary)
     MusicSourceType.UsbOtg -> stringResource(R.string.usb_source_summary)
     MusicSourceType.Server -> stringResource(R.string.server_source_summary)
+    MusicSourceType.Radio -> stringResource(R.string.radio_source_summary)
 }

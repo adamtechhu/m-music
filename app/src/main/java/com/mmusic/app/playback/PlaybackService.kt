@@ -363,7 +363,7 @@ class PlaybackService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setLargeIcon(loadArtworkBitmap(track.artworkUri))
+            .setLargeIcon(if (isLoading) null else loadArtworkBitmap(track.artworkUri))
             .setContentTitle(track.title)
             .setContentText(
                 when {
@@ -392,7 +392,11 @@ class PlaybackService : Service() {
     }
 
     private fun updateMetadata(track: ServiceTrack, durationMs: Long) {
-        val artworkBitmap = loadArtworkBitmap(track.artworkUri)
+        val artworkBitmap = if (durationMs <= 0L && track.artworkUri?.startsWith("http", ignoreCase = true) == true) {
+            null
+        } else {
+            loadArtworkBitmap(track.artworkUri)
+        }
         mediaSession.setMetadata(
             MediaMetadataCompat.Builder()
                 .putString(MediaMetadataCompat.METADATA_KEY_TITLE, track.title)

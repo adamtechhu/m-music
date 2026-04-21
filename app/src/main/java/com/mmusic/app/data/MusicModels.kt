@@ -6,12 +6,14 @@ import java.util.Locale
 
 enum class AppTab(@StringRes val titleRes: Int) {
     Player(R.string.player_tab),
+    Radio(R.string.radio_tab),
     Server(R.string.source_server),
     Settings(R.string.settings)
 }
 
 enum class LibraryCategory(@StringRes val titleRes: Int) {
     AllMusic(R.string.all_music),
+    Favorites(R.string.favorites),
     Artists(R.string.artists),
     Albums(R.string.albums),
     Folders(R.string.folders),
@@ -22,6 +24,7 @@ enum class MusicSourceType(@StringRes val titleRes: Int, @StringRes val statusRe
     Internal(R.string.source_internal, R.string.status_ready),
     SdCard(R.string.source_sd, R.string.status_waiting_media),
     UsbOtg(R.string.source_usb, R.string.status_waiting_media),
+    Radio(R.string.radio_tab, R.string.status_remote),
     Server(R.string.source_server, R.string.status_remote)
 }
 
@@ -179,6 +182,17 @@ data class ServerConfig(
     val statusMessage: String = ""
 )
 
+data class MetadataOverride(
+    val title: String,
+    val artist: String,
+    val album: String
+)
+
+data class AppReleaseNotes(
+    val version: String,
+    val pages: List<String>
+)
+
 val serverBitrateOptions = listOf(96, 128, 160, 192, 256, 320)
 
 enum class DrilldownType {
@@ -207,13 +221,18 @@ data class MMusicUiState(
     val bottomBarCompact: Boolean = false,
     val bottomBarShowLabels: Boolean = true,
     val bottomBarActiveGlow: Boolean = true,
+    val showServerTab: Boolean = true,
+    val showRadioTab: Boolean = true,
     val selectedAudioOutputMode: AudioOutputMode = AudioOutputMode.Speaker,
     val equalizerProfiles: List<EqualizerProfile> = AudioOutputMode.entries.map { EqualizerProfile(it) },
     val showPlaybackProgress: Boolean = true,
     val playbackMode: PlaybackMode = PlaybackMode.Normal,
     val language: AppLanguage = AppLanguage.English,
     val tracks: List<MusicTrack> = emptyList(),
+    val radioStations: List<MusicTrack> = emptyList(),
     val sources: List<SourceConfig> = emptyList(),
+    val favoriteTrackIds: Set<String> = emptySet(),
+    val metadataOverrides: Map<String, MetadataOverride> = emptyMap(),
     val libraryDrilldown: LibraryDrilldown? = null,
     val currentTrackId: String? = null,
     val isPlaying: Boolean = false,
@@ -228,6 +247,20 @@ data class MMusicUiState(
     val requestMediaPermission: Boolean = false,
     val showWelcomeDialog: Boolean = false,
     val isScanning: Boolean = false,
+    val isLoadingRadio: Boolean = false,
+    val radioCountryCode: String = "",
+    val radioCountryName: String = "",
+    val radioSearchQuery: String = "",
+    val showRadioMetadata: Boolean = true,
+    val radioLiveDetails: String = "",
+    val showRadioCountryPicker: Boolean = false,
+    val updateAvailableVersion: String? = null,
+    val updateUrl: String? = null,
+    val updateReleaseNotes: String = "",
+    val updateCheckStatus: String = "",
+    val showUpdateDialog: Boolean = false,
+    val releaseNotes: AppReleaseNotes = AppReleaseNotes(version = "1.1.0", pages = emptyList()),
+    val showReleaseNotesDialog: Boolean = false,
     val serverConfig: ServerConfig = ServerConfig(
         endpoint = "https://media.example.com/library",
         userName = "listener",

@@ -136,14 +136,14 @@ object MediaStoreScanner {
                     .onFail { _, _ -> }
                     .filter { file -> file.isFile && file.extension.lowercase() in audioExtensions }
                     .forEach { file ->
-                        val metadata = readMetadata(file)
+                        val metadata = readMetadata(context, file)
                         val sourceType = classifySource(context, "filesystem", file.absolutePath)
                         tracks += MusicTrack(
                             id = "fs_${normalizeAbsolutePath(file.absolutePath).hashCode()}",
                             title = metadata.title.ifBlank { file.nameWithoutExtension },
                             artist = metadata.artist.ifBlank { "Unknown artist" },
                             album = metadata.album.ifBlank { "Unknown album" },
-                            artworkUri = null,
+                            artworkUri = metadata.artworkUri,
                             folder = normalizeDisplayFolder(file.parent ?: "/Music", sourceType),
                             sourceType = sourceType,
                             duration = formatDuration(metadata.durationMs),
@@ -159,15 +159,21 @@ object MediaStoreScanner {
         return tracks.distinctBy { it.contentUri }
     }
 
-    private fun readMetadata(file: File): LocalMetadata {
+    private fun readMetadata(context: Context, file: File): LocalMetadata {
         val retriever = MediaMetadataRetriever()
         return runCatching {
             retriever.setDataSource(file.absolutePath)
+            val artworkUri = retriever.embeddedPicture?.let { bytes ->
+                val artworkFile = File(context.cacheDir, "artwork_${file.absolutePath.hashCode()}.jpg")
+                artworkFile.writeBytes(bytes)
+                Uri.fromFile(artworkFile).toString()
+            }
             LocalMetadata(
                 title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty(),
                 artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty(),
                 album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).orEmpty(),
-                durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L,
+                artworkUri = artworkUri
             )
         }.getOrDefault(LocalMetadata()).also {
             runCatching { retriever.release() }
@@ -371,6 +377,7 @@ object MediaStoreScanner {
         val title: String = "",
         val artist: String = "",
         val album: String = "",
-        val durationMs: Long = 0L
+        val durationMs: Long = 0L,
+        val artworkUri: String? = null
     )
 }

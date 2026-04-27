@@ -110,7 +110,7 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Link megnyitása</string>
     <string name="send_email">E-mail írása</string>
-    <string name="version_label">Verzió: 1.1.0</string>
+    <string name="version_label">Verzió: 1.1.1</string>
     <string name="language_english">Angol</string>
     <string name="language_hungarian">Magyar</string>
     <string name="language_german">Német</string>
@@ -243,8 +243,8 @@
     <string name="radio_metadata_toggle">Műsorinformáció megjelenítése</string>
     <string name="radio_now_playing_title">Aktuális rádióműsor / zene</string>
     <string name="radio_metadata_unavailable">Ehhez az állomáshoz most nincs elérhető plusz élő metaadat.</string>
-    <string name="release_notes_page_1">📱 M-Music v1.1.0 Release Notes\n\n🛠️ Javítások &amp; Optimalizálás\nVillámgyors Szerver-lejátszás: Optimalizáltuk a pufferelést, így a távoli zenék sokkal gyorsabban indulnak.\n\nLock Screen Album Art: Mostantól a zárolt képernyőn is megjelenik az album borítója.\n\nStabil Mappa-szűrés: A mappaszűrés után nem tűnnek el a könyvtárak, minden zenei mappa listázva marad.</string>
-    <string name="release_notes_page_2">📶 Okos Offline Mód\nA „Csak Wi‑Fi” korlátozás már nem vonatkozik a letöltött zenékre.\n\n🎵 Mini Lejátszó Logika\nHa már fut zene a háttérben, az app mini lejátszó módban marad, és nem dobja fel feleslegesen a nagy lejátszót.\n\n✨ Android 12+ Tematikus Ikon\nBekerült a rendszer színeihez igazodó tematikus ikon támogatása.</string>
-    <string name="release_notes_page_3">📝 Metaadat Szerkesztő\nA helyi zenék metaadatai már szerkeszthetők az appban.\n\n❤️ Kedvencek\nA helyi és szerveres számok egy közös Kedvencek nézetbe tehetők.\n\n📻 Online Rádió &amp; 🔄 Frissítések\nBekerült az ország alapú online rádió, a GitHub frissítésfigyelés és a lapozható release notes ablak.</string>
+    <string name="release_notes_page_1">📁 Mappakezelés\nKijavítottuk azt a hibát, amely miatt a kikapcsolt mappákat nem lehetett újra bekapcsolni.\n\n⭐ Kedvencek\nMegoldottuk a problémát, ami miatt a Kedvencek rész esetenként nem jelent meg.\n\n📻 Rádiószerverek\nTovábbfejlesztettük és stabilabbá tettük a rádiószerverek működését a zavartalanabb élmény érdekében.</string>
+    <string name="release_notes_page_2">🌐 Nyelvkövetés\nAz app és a release notes mostantól mindig a telefon nyelvéhez igazodik.\n\n🎉 Frissítés utáni fogadás\nFrissítés után a felhasználót újra fogadja az aktuális verzió release notes ablaka.</string>
+    <string name="release_notes_page_3">✅ M-Music v1.1.1\nEz a frissítés hibajavításokra, jobb mappavezérlésre, megbízhatóbb Kedvencek megjelenítésre és stabilabb online rádiózásra fókuszál.</string>
     <string name="onboarding_storage_note">Az appnak szüksége van teljes hozzáférésre a mappákhoz. Kérlek ezt add meg, hogy használni tudd az appot.</string>
 </resources>

@@ -304,9 +304,9 @@ private fun PlayerTab(
         .sorted()
     val filtered = libraryTracks
         .filter { it.sourceType == MusicSourceType.Server || it.sourceType in localSourceTypes }
-        .filter { enabledTypes.isEmpty() || it.sourceType in enabledTypes }
+        .filter { state.selectedCategory == LibraryCategory.Favorites || enabledTypes.isEmpty() || it.sourceType in enabledTypes }
         .filter { state.selectedCategory != LibraryCategory.Favorites || it.id in state.favoriteTrackIds }
-        .filter { state.selectedSourceFilter == null || it.sourceType == state.selectedSourceFilter }
+        .filter { state.selectedCategory == LibraryCategory.Favorites || state.selectedSourceFilter == null || it.sourceType == state.selectedSourceFilter }
         .filter { q ->
             val s = state.librarySearchQuery.trim()
             s.isBlank() || listOf(q.title, q.artist, q.album, q.folder).any { it.contains(s, true) }
@@ -644,7 +644,6 @@ private fun SettingsTab(
                                 .split('\n')
                                 .map { it.trim() }
                                 .filter { it.isNotBlank() }
-                                .ifEmpty { source.availableFolders }
                                 .toSet()
                             source.availableFolders.forEach { folder ->
                                 SettingRow(

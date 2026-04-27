@@ -455,6 +455,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                 sources = StorageDetector.detectSources(app, state.sources, state.serverConfig.connected)
             )
         }
+        persistAllSourceSettings()
         if (_uiState.value.hasMediaPermission) {
             loadLocalTracks()
         }
@@ -496,9 +497,6 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                         source
                     } else {
                         val selected = parseSelectedFolders(source).toMutableSet()
-                        if (selected.isEmpty()) {
-                            selected += source.availableFolders
-                        }
                         if (!selected.add(folder)) {
                             selected.remove(folder)
                         }
@@ -835,6 +833,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                     isScanning = false
                 )
             }
+            persistAllSourceSettings()
             if (shouldShowInitialScanDialog) {
                 prefs.edit().putBoolean("initial_scan_done", true).apply()
                 shouldShowInitialScanDialog = false
@@ -882,17 +881,20 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                 .map { it.folder }
                 .distinct()
                 .sorted()
-            if (discoveredFolders.isEmpty()) {
+            val knownFolders = (source.availableFolders + discoveredFolders)
+                .distinct()
+                .sorted()
+            if (knownFolders.isEmpty()) {
                 source.copy(availableFolders = emptyList())
             } else {
-                val currentSelection = parseSelectedFolders(source).filter { it in discoveredFolders }
-                val nextSelection = if (source.folderManagementEnabled && currentSelection.isEmpty()) {
-                    discoveredFolders
+                val currentSelection = parseSelectedFolders(source).filter { it in knownFolders }
+                val nextSelection = if (source.folderManagementEnabled && currentSelection.isEmpty() && source.availableFolders.isEmpty()) {
+                    knownFolders
                 } else {
                     currentSelection
                 }
                 source.copy(
-                    availableFolders = discoveredFolders,
+                    availableFolders = knownFolders,
                     selectedFolder = nextSelection.joinToString("\n")
                 )
             }
@@ -912,9 +914,16 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
             .putBoolean("source_${sourceType.name}_enabled", source.enabled)
             .putBoolean("source_${sourceType.name}_folder_management", source.folderManagementEnabled)
             .putString("source_${sourceType.name}_folders", source.selectedFolder)
+            .putString("source_${sourceType.name}_available_folders", source.availableFolders.joinToString("\n"))
             .putStringSet("source_${sourceType.name}_formats", source.selectedFormats.toSet())
             .putString("source_${sourceType.name}_duration", source.durationFilter.name)
             .apply()
+    }
+
+    private fun persistAllSourceSettings() {
+        _uiState.value.sources.forEach { source ->
+            persistSourceSettings(source.type)
+        }
     }
 
     private fun restoreSourceSettings(): List<com.mmusic.app.data.SourceConfig> {
@@ -925,6 +934,10 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                 enabled = prefs.getBoolean("source_${type.name}_enabled", type == MusicSourceType.Internal),
                 folderManagementEnabled = prefs.getBoolean("source_${type.name}_folder_management", false),
                 selectedFolder = prefs.getString("source_${type.name}_folders", "").orEmpty(),
+                availableFolders = prefs.getString("source_${type.name}_available_folders", "").orEmpty()
+                    .split('\n')
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() },
                 selectedFormats = prefs.getStringSet("source_${type.name}_formats", emptySet()).orEmpty().toList().sorted(),
                 durationFilter = runCatching {
                     DurationFilter.valueOf(
@@ -1702,8 +1715,16 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun fetchRadioStations(countryCode: String): List<MusicTrack> {
         val encodedCountry = URLEncoder.encode(countryCode, StandardCharsets.UTF_8.name())
-        val endpoint = "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/$encodedCountry?hidebroken=true&order=votes&reverse=true&limit=80"
-        val body = openConnection(endpoint).inputStream.bufferedReader().use { it.readText() }
+        val endpoints = listOf(
+            "https://de1.api.radio-browser.info/json/stations/bycountrycodeexact/$encodedCountry?hidebroken=true&order=votes&reverse=true&limit=80",
+            "https://fr1.api.radio-browser.info/json/stations/bycountrycodeexact/$encodedCountry?hidebroken=true&order=votes&reverse=true&limit=80",
+            "https://nl1.api.radio-browser.info/json/stations/bycountrycodeexact/$encodedCountry?hidebroken=true&order=votes&reverse=true&limit=80"
+        )
+        val body = endpoints.firstNotNullOfOrNull { endpoint ->
+            runCatching {
+                openConnection(endpoint).inputStream.bufferedReader().use { it.readText() }
+            }.getOrNull()
+        } ?: return emptyList()
         val json = JSONArray(body)
         return buildList {
             for (index in 0 until json.length()) {

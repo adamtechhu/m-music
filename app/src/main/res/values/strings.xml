@@ -115,7 +115,7 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Open link</string>
     <string name="send_email">Send email</string>
-    <string name="version_label">Version: 1.1.0</string>
+    <string name="version_label">Version: 1.1.1</string>
     <string name="check_updates_title">Check for updates</string>
     <string name="check_updates_description">Look for new releases on the GitHub project page.</string>
     <string name="check_updates_action">Check now</string>
@@ -151,9 +151,9 @@
     <string name="radio_metadata_toggle">Show radio program info</string>
     <string name="radio_now_playing_title">Current radio program / music</string>
     <string name="radio_metadata_unavailable">No extra live metadata is available for this station.</string>
-    <string name="release_notes_page_1">📱 M-Music v1.1.0 Release Notes\n\n🛠️ Fixes &amp; Optimization\nVillámgyors Szerver-lejátszás: Optimized server buffering makes remote tracks start faster.\n\nLock Screen Album Art: Album art now appears on the lock screen during playback.\n\nStabil Mappa-szűrés: Folder filters stay visible, and all music folders remain listed.</string>
-    <string name="release_notes_page_2">📶 Okos Offline Mód\nThe \"Wi-Fi only\" rule no longer blocks already downloaded tracks.\n\n🎵 Mini Player Logic\nIf audio is already playing in the background, the app stays in mini player mode instead of forcing the full player.\n\n✨ Android 12+ Themed Icon\nAdded monochrome icon support for themed launcher icons on newer Android versions.</string>
-    <string name="release_notes_page_3">📝 Metadata Editor\nLocal device tracks can now be edited in-app.\n\n❤️ Favorites\nYou can save local and server tracks into one Favorites section.\n\n📻 Online Radio &amp; 🔄 Updates\nAdded free online radio by country, update checks from GitHub, and in-app release notes pages.</string>
+    <string name="release_notes_page_1">📁 Folder Management\nFixed an issue where disabled folders could not be turned back on.\n\n⭐ Favorites\nFixed a problem that could make the Favorites section disappear in some cases.\n\n📻 Radio Servers\nImproved radio server stability for a smoother listening experience.</string>
+    <string name="release_notes_page_2">🌐 Language Awareness\nThe app and release notes now always follow the phone language.\n\n🎉 Release Notes After Update\nAfter updating, users are greeted again with the current release notes for the new version.</string>
+    <string name="release_notes_page_3">✅ M-Music v1.1.1\nThis update focuses on bug fixes, better folder control, more reliable Favorites visibility, and more stable online radio.</string>
     <string name="language_english">English</string>
     <string name="language_hungarian">Hungarian</string>
     <string name="language_german">German</string>

@@ -259,7 +259,7 @@ data class MMusicUiState(
     val updateReleaseNotes: String = "",
     val updateCheckStatus: String = "",
     val showUpdateDialog: Boolean = false,
-    val releaseNotes: AppReleaseNotes = AppReleaseNotes(version = "1.1.0", pages = emptyList()),
+    val releaseNotes: AppReleaseNotes = AppReleaseNotes(version = "1.1.1", pages = emptyList()),
     val showReleaseNotesDialog: Boolean = false,
     val serverConfig: ServerConfig = ServerConfig(
         endpoint = "https://media.example.com/library",

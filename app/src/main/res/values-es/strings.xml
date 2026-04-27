@@ -80,7 +80,7 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Abrir enlace</string>
     <string name="send_email">Enviar correo</string>
-    <string name="version_label">Versión: Beta 1.0</string>
+    <string name="version_label">Versión: 1.1.1</string>
     <string name="language_english">Inglés</string>
     <string name="language_hungarian">Húngaro</string>
     <string name="language_german">Alemán</string>
@@ -145,4 +145,7 @@
     <string name="server_bitrate_disabled_hint">La selección de bitrate se desactiva mientras la calidad original está activa.</string>
     <string name="server_wifi_only_blocked">La reproducción del servidor está limitada a Wi‑Fi según Ajustes.</string>
     <string name="onboarding_storage_note">La app necesita acceso completo a tus carpetas. Por favor concédelo para poder usar la aplicación.</string>
+    <string name="release_notes_page_1">📁 Gestión de carpetas\nCorregimos el error que impedía volver a activar carpetas desactivadas.\n\n⭐ Favoritos\nSolucionamos el problema por el que la sección Favoritos a veces no aparecía.\n\n📻 Servidores de radio\nHicimos los servidores de radio más estables y fiables para una experiencia más fluida.</string>
+    <string name="release_notes_page_2">🌐 Adaptación de idioma\nLa app y las release notes ahora siguen siempre el idioma del teléfono.\n\n🎉 Release notes tras actualizar\nDespués de una actualización, el usuario vuelve a recibir las release notes de la nueva versión.</string>
+    <string name="release_notes_page_3">✅ M-Music v1.1.1\nEsta actualización se centra en correcciones, mejor control de carpetas, una vista de Favoritos más fiable y radio online más estable.</string>
 </resources>

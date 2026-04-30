@@ -80,7 +80,10 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Abrir enlace</string>
     <string name="send_email">Enviar correo</string>
-    <string name="version_label">Versión: 1.1.1</string>
+    <string name="version_label">Versión: 1.1.2</string>
+    <string name="music_refresh_title">Actualizar biblioteca musical</string>
+    <string name="music_refresh_description">Inicia de inmediato una nueva búsqueda de música. La app también prepara ciclos automáticos de actualización cada 5 días en segundo plano.</string>
+    <string name="music_refresh_action">Buscar música ahora</string>
     <string name="language_english">Inglés</string>
     <string name="language_hungarian">Húngaro</string>
     <string name="language_german">Alemán</string>
@@ -145,7 +148,7 @@
     <string name="server_bitrate_disabled_hint">La selección de bitrate se desactiva mientras la calidad original está activa.</string>
     <string name="server_wifi_only_blocked">La reproducción del servidor está limitada a Wi‑Fi según Ajustes.</string>
     <string name="onboarding_storage_note">La app necesita acceso completo a tus carpetas. Por favor concédelo para poder usar la aplicación.</string>
-    <string name="release_notes_page_1">📁 Gestión de carpetas\nCorregimos el error que impedía volver a activar carpetas desactivadas.\n\n⭐ Favoritos\nSolucionamos el problema por el que la sección Favoritos a veces no aparecía.\n\n📻 Servidores de radio\nHicimos los servidores de radio más estables y fiables para una experiencia más fluida.</string>
-    <string name="release_notes_page_2">🌐 Adaptación de idioma\nLa app y las release notes ahora siguen siempre el idioma del teléfono.\n\n🎉 Release notes tras actualizar\nDespués de una actualización, el usuario vuelve a recibir las release notes de la nueva versión.</string>
-    <string name="release_notes_page_3">✅ M-Music v1.1.1\nEsta actualización se centra en correcciones, mejor control de carpetas, una vista de Favoritos más fiable y radio online más estable.</string>
+    <string name="release_notes_page_1">✨ Novedades y correcciones\n\n📁 Shuffle por carpetas\nSi filtras una o varias carpetas, el modo aleatorio ahora se limita estrictamente a la música de esas carpetas seleccionadas.\n\n🔀 Sistema de shuffle inteligente\nLa app analiza la lista filtrada, numera todas las canciones y crea un orden aleatorio fijo antes de seguir reproduciendo.</string>
+    <string name="release_notes_page_2">🔄 Siguiente ronda en segundo plano\nAntes de que llegues al final de la lista aleatoria actual, la app ya prepara en segundo plano la siguiente ronda mezclada.\n\n⚡ Búsqueda musical inmediata y programada\nLa actualización de música empieza al instante y la app mantiene además ciclos automáticos de actualización cada 5 días.</string>
+    <string name="release_notes_page_3">⚙️ Comprobación manual\nAhora hay un nuevo botón en Ajustes para iniciar manualmente la actualización y búsqueda de música cuando quieras.\n\n✅ M-Music v1.1.2\nEsta versión se centra en un shuffle por carpetas más preciso, reproducción aleatoria más inteligente y una actualización musical más rápida.</string>
 </resources>

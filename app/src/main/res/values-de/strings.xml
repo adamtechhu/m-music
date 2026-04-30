@@ -80,7 +80,10 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Link öffnen</string>
     <string name="send_email">E-Mail senden</string>
-    <string name="version_label">Version: 1.1.1</string>
+    <string name="version_label">Version: 1.1.2</string>
+    <string name="music_refresh_title">Musikbibliothek aktualisieren</string>
+    <string name="music_refresh_description">Startet sofort eine neue Musiksuche. Die App bereitet außerdem im Hintergrund alle 5 Tage automatische Aktualisierungsrunden vor.</string>
+    <string name="music_refresh_action">Jetzt Musik scannen</string>
     <string name="language_english">Englisch</string>
     <string name="language_hungarian">Ungarisch</string>
     <string name="language_german">Deutsch</string>
@@ -145,7 +148,7 @@
     <string name="server_bitrate_disabled_hint">Die Bitrate-Auswahl ist deaktiviert, solange die Wiedergabe in Originalqualität aktiv ist.</string>
     <string name="server_wifi_only_blocked">Die Server-Wiedergabe ist in den Einstellungen auf WLAN beschränkt.</string>
     <string name="onboarding_storage_note">Die App benötigt vollen Zugriff auf deine Ordner. Bitte erlaube das, damit du die App verwenden kannst.</string>
-    <string name="release_notes_page_1">📁 Ordnerverwaltung\nEin Fehler wurde behoben, durch den deaktivierte Ordner nicht wieder aktiviert werden konnten.\n\n⭐ Favoriten\nEin Problem wurde behoben, durch das der Favoriten-Bereich in manchen Fällen nicht angezeigt wurde.\n\n📻 Radioserver\nDie Radioserver wurden weiter verbessert und stabiler gemacht, damit das Hörerlebnis reibungsloser ist.</string>
-    <string name="release_notes_page_2">🌐 Sprachanpassung\nDie App und die Release Notes folgen jetzt immer der Sprache des Telefons.\n\n🎉 Release Notes nach dem Update\nNach einem Update wird der Nutzer erneut mit den aktuellen Release Notes der neuen Version begrüßt.</string>
-    <string name="release_notes_page_3">✅ M-Music v1.1.1\nDieses Update konzentriert sich auf Fehlerbehebungen, bessere Ordnersteuerung, zuverlässigere Favoriten-Anzeige und stabileres Online-Radio.</string>
+    <string name="release_notes_page_1">✨ Neuerungen und Verbesserungen\n\n📁 Ordnerbezogenes Shuffle\nWenn du auf einen oder mehrere Ordner filterst, arbeitet Shuffle jetzt strikt nur noch mit den Titeln aus diesen ausgewählten Ordnern.\n\n🔀 Intelligentes Shuffle-System\nDie App erfasst jetzt die gefilterte Liste, nummeriert alle Titel und erstellt daraus eine feste zufällige Reihenfolge.</string>
+    <string name="release_notes_page_2">🔄 Nächste Shuffle-Runde im Hintergrund\nNoch bevor du das Ende der aktuellen Zufallsliste erreichst, bereitet die App bereits im Hintergrund die nächste gemischte Runde vor.\n\n⚡ Sofortiger und geplanter Musikscan\nDie Musikaktualisierung startet sofort, und die App hält zusätzlich automatische Aktualisierungszyklen alle 5 Tage bereit.</string>
+    <string name="release_notes_page_3">⚙️ Manuelle Prüfung\nIn den Einstellungen gibt es jetzt einen neuen Button, mit dem du die Musiksuche und Aktualisierung jederzeit manuell starten kannst.\n\n✅ M-Music v1.1.2\nDieses Update bringt präziseres ordnerbasiertes Shuffle, intelligentere Zufallswiedergabe und schnelleres Auffrischen der Musikbibliothek.</string>
 </resources>

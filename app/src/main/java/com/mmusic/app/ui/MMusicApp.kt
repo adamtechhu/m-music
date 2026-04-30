@@ -572,6 +572,16 @@ private fun SettingsTab(
             )
         }
         if (selectedSection == "storage") {
+            item {
+                AboutLinkCard(
+                    icon = Icons.Rounded.LibraryMusic,
+                    title = stringResource(R.string.music_refresh_title),
+                    description = stringResource(R.string.music_refresh_description),
+                    actionLabel = stringResource(R.string.music_refresh_action),
+                    accent = MaterialTheme.colorScheme.primaryContainer,
+                    onClick = onRefreshSources
+                )
+            }
             item { Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { IconButton(onClick = onRefreshSources) { Icon(Icons.Rounded.Refresh, null) } } }
             items(state.sources.filter { it.type != MusicSourceType.Server }) { source ->
                 Block {

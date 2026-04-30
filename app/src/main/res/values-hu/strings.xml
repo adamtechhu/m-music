@@ -110,7 +110,7 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Link megnyitása</string>
     <string name="send_email">E-mail írása</string>
-    <string name="version_label">Verzió: 1.1.1</string>
+    <string name="version_label">Verzió: 1.1.2</string>
     <string name="language_english">Angol</string>
     <string name="language_hungarian">Magyar</string>
     <string name="language_german">Német</string>
@@ -211,6 +211,9 @@
     <string name="check_updates_title">Frissítések keresése</string>
     <string name="check_updates_description">Új kiadások keresése a GitHub projektoldalon.</string>
     <string name="check_updates_action">Keresés most</string>
+    <string name="music_refresh_title">Zenei könyvtár frissítése</string>
+    <string name="music_refresh_description">Azonnal elindít egy új zenekeresést. Az app a háttérben 5 naponta új automatikus frissítési kört is készít elő.</string>
+    <string name="music_refresh_action">Zenék keresése most</string>
     <string name="release_notes_title">Release notes</string>
     <string name="release_notes_description">Olvasd el az új funkciókat és javításokat.</string>
     <string name="open_release_notes">Release notes megnyitása</string>
@@ -243,8 +246,8 @@
     <string name="radio_metadata_toggle">Műsorinformáció megjelenítése</string>
     <string name="radio_now_playing_title">Aktuális rádióműsor / zene</string>
     <string name="radio_metadata_unavailable">Ehhez az állomáshoz most nincs elérhető plusz élő metaadat.</string>
-    <string name="release_notes_page_1">📁 Mappakezelés\nKijavítottuk azt a hibát, amely miatt a kikapcsolt mappákat nem lehetett újra bekapcsolni.\n\n⭐ Kedvencek\nMegoldottuk a problémát, ami miatt a Kedvencek rész esetenként nem jelent meg.\n\n📻 Rádiószerverek\nTovábbfejlesztettük és stabilabbá tettük a rádiószerverek működését a zavartalanabb élmény érdekében.</string>
-    <string name="release_notes_page_2">🌐 Nyelvkövetés\nAz app és a release notes mostantól mindig a telefon nyelvéhez igazodik.\n\n🎉 Frissítés utáni fogadás\nFrissítés után a felhasználót újra fogadja az aktuális verzió release notes ablaka.</string>
-    <string name="release_notes_page_3">✅ M-Music v1.1.1\nEz a frissítés hibajavításokra, jobb mappavezérlésre, megbízhatóbb Kedvencek megjelenítésre és stabilabb online rádiózásra fókuszál.</string>
+    <string name="release_notes_page_1">✨ Újdonságok és Javítások\n\n📁 Mappaszintű Keverés\nHa egy vagy több mappára szűrsz, a shuffle mostantól kizárólag a kiválasztott mappák zenéi között működik.\n\n🔀 Intelligens Keverési Rendszer\nA rendszer feltérképezi a szűrt listát, beszámozza a dalokat, majd egy fix véletlenszerű sorrendet készít.</string>
+    <string name="release_notes_page_2">🔄 Háttérben készülő következő kör\nMielőtt a mostani véletlen lista végére érnél, az app már a háttérben előkészíti a következő keverési sorrendet.\n\n⚡ Azonnali és ütemezett zenekeresés\nA zenefrissítés azonnal elindul, és az app 5 naponta automatikus frissítési kört is fenntart.</string>
+    <string name="release_notes_page_3">⚙️ Manuális ellenőrzés\nA Beállításokban új gombbal bármikor kézzel is indítható a zenék frissítése és keresése.\n\n✅ M-Music v1.1.2\nEz a verzió pontosabb mappaszűrt shuffle-t, okosabb véletlenszerű lejátszást és gyorsabb zenefrissítést hoz.</string>
     <string name="onboarding_storage_note">Az appnak szüksége van teljes hozzáférésre a mappákhoz. Kérlek ezt add meg, hogy használni tudd az appot.</string>
 </resources>

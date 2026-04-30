@@ -39,10 +39,12 @@ import com.mmusic.app.playback.PlaybackService
 import com.mmusic.app.playback.PlaybackQueueTrack
 import com.mmusic.app.playback.PlaybackStateStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
@@ -60,6 +62,7 @@ import org.json.JSONObject
 class MMusicViewModel(application: Application) : AndroidViewModel(application) {
     companion object {
         private const val DOWNLOADED_TRACK_PREFIX = "downloaded::"
+        private const val AUTO_REFRESH_INTERVAL_MS = 5L * 24L * 60L * 60L * 1000L
     }
 
     private val app = application
@@ -67,6 +70,10 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
     private val connectivityManager = application.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     private var shouldShowInitialScanDialog = !prefs.getBoolean("initial_scan_done", false)
     private var previousPlaybackState = PlaybackStateStore.state.value
+    private var activeShuffleSignature: String? = null
+    private var activeShuffleOrder: List<String> = emptyList()
+    private var activeShuffleIndex = -1
+    private var prefetchedShuffleOrder: List<String> = emptyList()
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             enforceWifiOnlyPolicy()
@@ -159,6 +166,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
             connectToServer()
         }
         maybeCheckForUpdatesOnLaunch()
+        scheduleAutomaticLibraryRefresh()
         connectivityManager?.registerDefaultNetworkCallback(networkCallback)
         viewModelScope.launch {
             PlaybackStateStore.state.collect { snapshot ->
@@ -834,6 +842,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
             persistAllSourceSettings()
+            prefs.edit().putLong("last_music_scan_at", System.currentTimeMillis()).apply()
             if (shouldShowInitialScanDialog) {
                 prefs.edit().putBoolean("initial_scan_done", true).apply()
                 shouldShowInitialScanDialog = false
@@ -1003,8 +1012,8 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         val queue = currentPlaybackQueue()
         updatePlaybackQueue(queue)
         if (queue.isEmpty()) return
-        if (step > 0 && _uiState.value.playbackMode == PlaybackMode.Shuffle) {
-            playRandomTrack(queue)
+        if (_uiState.value.playbackMode == PlaybackMode.Shuffle) {
+            playShuffledTrack(queue, step)
             return
         }
         val currentIndex = queue.indexOfFirst { it.id == _uiState.value.currentTrackId }
@@ -1024,6 +1033,7 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         val query = state.librarySearchQuery.trim()
         return state.tracks
             .filter { enabledTypes.isEmpty() || it.sourceType in enabledTypes }
+            .filter { state.selectedCategory != LibraryCategory.Favorites || it.id in state.favoriteTrackIds }
             .filter { state.selectedSourceFilter == null || it.sourceType == state.selectedSourceFilter }
             .filter { track ->
                 query.isBlank() || listOf(track.title, track.artist, track.album, track.folder).any { value ->
@@ -1056,21 +1066,41 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         when (_uiState.value.playbackMode) {
             PlaybackMode.Normal -> playAdjacentTrack(step = 1)
             PlaybackMode.RepeatOne -> findTrackById(current.currentTrackId)?.let(::startTrack)
-            PlaybackMode.Shuffle -> playRandomTrack(currentPlaybackQueue())
+            PlaybackMode.Shuffle -> playShuffledTrack(currentPlaybackQueue(), step = 1)
         }
     }
 
-    private fun playRandomTrack(queue: List<MusicTrack>) {
+    private fun playShuffledTrack(queue: List<MusicTrack>, step: Int) {
         if (queue.isEmpty()) return
-        updatePlaybackQueue(queue)
-        val currentId = _uiState.value.currentTrackId
-        val candidates = queue.filter { it.id != currentId }.ifEmpty { queue }
-        val targetTrack = candidates[Random.nextInt(candidates.size)]
-        startTrack(targetTrack)
+        ensureShuffleState(queue, _uiState.value.currentTrackId)
+        if (activeShuffleOrder.isEmpty()) return
+
+        val nextIndex = when {
+            step > 0 && activeShuffleIndex + 1 >= activeShuffleOrder.size -> {
+                rotateShuffleCycle(queue)
+                0
+            }
+            step > 0 -> activeShuffleIndex + 1
+            activeShuffleIndex <= 0 -> activeShuffleOrder.lastIndex
+            else -> activeShuffleIndex - 1
+        }.coerceIn(0, activeShuffleOrder.lastIndex)
+
+        activeShuffleIndex = nextIndex
+        maybePrefetchNextShuffleCycle(queue)
+        val targetTrack = queue.firstOrNull { it.id == activeShuffleOrder[activeShuffleIndex] } ?: return
+        startTrack(targetTrack, preserveShuffleState = true)
     }
 
-    private fun startTrack(track: MusicTrack) {
-        updatePlaybackQueue(queueForTrack(track))
+    private fun startTrack(track: MusicTrack, preserveShuffleState: Boolean = false) {
+        val queue = queueForTrack(track)
+        updatePlaybackQueue(queue)
+        if (_uiState.value.playbackMode == PlaybackMode.Shuffle && track.sourceType != MusicSourceType.Radio) {
+            if (preserveShuffleState) {
+                ensureShuffleState(queue, track.id)
+            } else {
+                primeShuffleState(queue, track.id)
+            }
+        }
         if (isWifiOnlyBlocked(track)) {
             handleWifiOnlyBlocked()
             return
@@ -1242,6 +1272,65 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
     private fun currentPlaybackQueue(): List<MusicTrack> {
         val currentTrack = findTrackById(_uiState.value.currentTrackId)
         return currentTrack?.let(::queueForTrack) ?: filteredPlayableTracks()
+    }
+
+    private fun primeShuffleState(queue: List<MusicTrack>, currentTrackId: String?) {
+        activeShuffleSignature = queueSignature(queue)
+        activeShuffleOrder = buildShuffleOrder(queue, currentTrackId)
+        activeShuffleIndex = if (currentTrackId == null) -1 else activeShuffleOrder.indexOf(currentTrackId).coerceAtLeast(0)
+        prefetchedShuffleOrder = buildShuffleOrder(queue, null)
+        maybePrefetchNextShuffleCycle(queue)
+    }
+
+    private fun ensureShuffleState(queue: List<MusicTrack>, currentTrackId: String?) {
+        val signature = queueSignature(queue)
+        val signatureChanged = activeShuffleSignature != signature
+        val currentMissing = currentTrackId != null && currentTrackId !in activeShuffleOrder
+        if (signatureChanged || activeShuffleOrder.isEmpty() || currentMissing) {
+            primeShuffleState(queue, currentTrackId)
+            return
+        }
+        if (currentTrackId != null) {
+            activeShuffleIndex = activeShuffleOrder.indexOf(currentTrackId).takeIf { it >= 0 } ?: activeShuffleIndex
+        }
+        maybePrefetchNextShuffleCycle(queue)
+    }
+
+    private fun rotateShuffleCycle(queue: List<MusicTrack>) {
+        activeShuffleOrder = if (prefetchedShuffleOrder.isNotEmpty()) {
+            prefetchedShuffleOrder
+        } else {
+            buildShuffleOrder(queue, null)
+        }
+        activeShuffleIndex = -1
+        prefetchedShuffleOrder = buildShuffleOrder(queue, null)
+        activeShuffleSignature = queueSignature(queue)
+    }
+
+    private fun maybePrefetchNextShuffleCycle(queue: List<MusicTrack>) {
+        if (queue.isEmpty()) return
+        val remainingTracks = activeShuffleOrder.size - activeShuffleIndex - 1
+        if (prefetchedShuffleOrder.isEmpty() || remainingTracks <= 1) {
+            prefetchedShuffleOrder = buildShuffleOrder(queue, null)
+        }
+    }
+
+    private fun buildShuffleOrder(queue: List<MusicTrack>, currentTrackId: String?): List<String> {
+        if (queue.isEmpty()) return emptyList()
+        val currentId = currentTrackId?.takeIf { id -> queue.any { it.id == id } }
+        val shuffledIds = queue
+            .mapIndexed { index, _ -> index }
+            .filterNot { queue[it].id == currentId }
+            .shuffled(Random(System.nanoTime()))
+            .map { queue[it].id }
+        return buildList {
+            currentId?.let(::add)
+            addAll(shuffledIds)
+        }
+    }
+
+    private fun queueSignature(queue: List<MusicTrack>): String {
+        return queue.joinToString("|") { it.id }
     }
 
     private fun findTrackById(trackId: String?): MusicTrack? {
@@ -1691,9 +1780,19 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun maybeCheckForUpdatesOnLaunch() {
         val lastCheckAt = prefs.getLong("last_update_check_at", 0L)
-        val fiveDaysMs = 5L * 24L * 60L * 60L * 1000L
-        if (System.currentTimeMillis() - lastCheckAt >= fiveDaysMs) {
+        if (System.currentTimeMillis() - lastCheckAt >= AUTO_REFRESH_INTERVAL_MS) {
             checkForUpdates(force = false)
+        }
+    }
+
+    private fun scheduleAutomaticLibraryRefresh() {
+        viewModelScope.launch {
+            while (isActive) {
+                delay(AUTO_REFRESH_INTERVAL_MS)
+                if (_uiState.value.hasMediaPermission) {
+                    refreshDetectedSources()
+                }
+            }
         }
     }
 

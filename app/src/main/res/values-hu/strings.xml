@@ -1,10 +1,11 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">M-Music</string>
     <string name="player_tab">Lejátszó</string>
     <string name="sources">Források</string>
     <string name="settings">Beállítások</string>
     <string name="player_subtitle">Zene és lejátszás egy helyen</string>
+    <string name="settings_overview_hint">Gyors hozzáférés a megjelenéshez, hanghoz, tárhelyhez és a projekt infóihoz.</string>
     <string name="welcome_title">Modern zenekezelés minden tárhelyforráshoz</string>
     <string name="welcome_subtitle">Böngészés tagek, album, előadó, mappák vagy csatlakoztatott forrás alapján.</string>
     <string name="onboarding_title">Üdv a M-Music appban!</string>
@@ -43,6 +44,16 @@
     <string name="theme_ocean_glass">Ocean Glass</string>
     <string name="theme_forest_echo">Forest Echo</string>
     <string name="theme_sunset_flux">Sunset Flux</string>
+    <string name="theme_ice_signal">Jégjel</string>
+    <string name="theme_amber_circuit">Borostyán kör</string>
+    <string name="theme_violet_bloom">Violavirág</string>
+    <string name="theme_mint_current">Mentazöld áramlat</string>
+    <string name="theme_steel_garden">Acélkert</string>
+    <string name="theme_rose_quartz">Rózsakvarc</string>
+    <string name="theme_cobalt_run">Kobaltfutam</string>
+    <string name="theme_sandline">Homokvonal</string>
+    <string name="theme_ember_pulse">Parázsütem</string>
+    <string name="theme_prism_night">Prizma éj</string>
     <string name="dark_mode_title">Sötét mód szintje</string>
     <string name="dark_mode_standard">Alap sötét mód</string>
     <string name="dark_mode_extra">Extra sötét mód</string>
@@ -110,7 +121,7 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Link megnyitása</string>
     <string name="send_email">E-mail írása</string>
-    <string name="version_label">Verzió: 1.1.2</string>
+    <string name="version_label">Verzió: %1$s</string>
     <string name="language_english">Angol</string>
     <string name="language_hungarian">Magyar</string>
     <string name="language_german">Német</string>
@@ -186,8 +197,12 @@
     <string name="server_mobile_data_warning">Mobilnet aktív. A szerveres lejátszás vagy letöltés mobiladatot használhat.</string>
     <string name="server_share_blocked_title">A megosztás nem érhető el</string>
     <string name="server_share_blocked_message">Biztonsági okokból a szerverről lejátszott szám nem osztható meg fájlként.</string>
-    <string name="disco_party_beta_title">Diszkó Party BETA</string>
-    <string name="disco_party_beta_message">Ez bekapcsolja a zseblámpát, és a zene ütemére fog villogni. Gyorsabban merítheti az akkumulátort.</string>
+    <string name="disco_party_title">Diszkó Party</string>
+    <string name="disco_party_message">Ez bekapcsolja a zseblámpát és a rezgésütemet a zene ritmusára. Gyorsabban merítheti az akkumulátort.</string>
+    <string name="music_vibration_beat">Rezgésütem</string>
+    <string name="music_vibration_warning_title">Bekapcsolod a rezgésütemet?</string>
+    <string name="music_vibration_warning_message">Ez a telefon a zene ütemére fog rezegni, és gyorsabban merítheti az akkumulátort.</string>
+    <string name="download_and_install">Letöltés és telepítés</string>
     <string name="playback_mode_normal">Alap lejátszás</string>
     <string name="playback_mode_repeat">Ismétlés</string>
     <string name="playback_mode_shuffle">Keverés</string>
@@ -223,6 +238,7 @@
     <string name="update_check_failed">A frissítés ellenőrzése sikertelen.</string>
     <string name="update_available">Új frissítés érhető el: %1$s</string>
     <string name="no_update_available">Nincs elérhető újabb frissítés.</string>
+    <string name="install_permission_required">Engedélyezd az appból történő telepítést, majd próbáld újra a frissítést.</string>
     <string name="add_favorite">Hozzáadás a kedvencekhez</string>
     <string name="remove_favorite">Eltávolítás a kedvencekből</string>
     <string name="edit_metadata_title">Metaadat szerkesztése</string>
@@ -244,10 +260,8 @@
     <string name="radio_empty_message">Válassz országot az online rádiók betöltéséhez.</string>
     <string name="radio_live_label">Élő rádió</string>
     <string name="radio_metadata_toggle">Műsorinformáció megjelenítése</string>
-    <string name="radio_now_playing_title">Aktuális rádióműsor / zene</string>
-    <string name="radio_metadata_unavailable">Ehhez az állomáshoz most nincs elérhető plusz élő metaadat.</string>
-    <string name="release_notes_page_1">✨ Újdonságok és Javítások\n\n📁 Mappaszintű Keverés\nHa egy vagy több mappára szűrsz, a shuffle mostantól kizárólag a kiválasztott mappák zenéi között működik.\n\n🔀 Intelligens Keverési Rendszer\nA rendszer feltérképezi a szűrt listát, beszámozza a dalokat, majd egy fix véletlenszerű sorrendet készít.</string>
-    <string name="release_notes_page_2">🔄 Háttérben készülő következő kör\nMielőtt a mostani véletlen lista végére érnél, az app már a háttérben előkészíti a következő keverési sorrendet.\n\n⚡ Azonnali és ütemezett zenekeresés\nA zenefrissítés azonnal elindul, és az app 5 naponta automatikus frissítési kört is fenntart.</string>
-    <string name="release_notes_page_3">⚙️ Manuális ellenőrzés\nA Beállításokban új gombbal bármikor kézzel is indítható a zenék frissítése és keresése.\n\n✅ M-Music v1.1.2\nEz a verzió pontosabb mappaszűrt shuffle-t, okosabb véletlenszerű lejátszást és gyorsabb zenefrissítést hoz.</string>
+    <string name="release_notes_page_1">✨ M-Music v1.2.0\n\nA lejátszás most kiszámíthatóbb és megbízhatóbb. Ha az app teljesen bezárul, a zene is megáll, és más hangot indító alkalmazások át tudják venni a helyét.\n\nA háttérben futó lejátszás is rendezettebb lett, és a régi, felesleges értesítések sem maradnak ott, amikor már nincs rájuk szükség.</string>
+    <string name="release_notes_page_2">🎛️ Frissebb témák és átláthatóbb Beállítások\n\nA Beállítások oldala átdolgozott felépítést kapott, hogy a témák könnyebben áttekinthetők legyenek, és tíz új téma is bekerült a választékba.\n\nA Diszkó mód most külön rezgésvezérlést is kapott a zseblámpa mellé, így a fény- és haptikus hatás jobban a saját ízlésedhez igazítható.</string>
+    <string name="release_notes_page_3">⬇️ Közvetlen GitHub-frissítés\n\nA frissítések most már közvetlenül a GitHub release APK-jából tölthetők le, és az appból el is indítható a telepítés.\n\nEmellett több kisebb finomítás is készült, hogy az egész app gördülékenyebb és kellemesebb legyen használat közben.</string>
     <string name="onboarding_storage_note">Az appnak szüksége van teljes hozzáférésre a mappákhoz. Kérlek ezt add meg, hogy használni tudd az appot.</string>
 </resources>

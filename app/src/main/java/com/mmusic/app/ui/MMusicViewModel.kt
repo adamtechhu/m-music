@@ -3,10 +3,14 @@ package com.mmusic.app.ui
 import android.app.Application
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.mmusic.app.BuildConfig
@@ -730,19 +734,118 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 return@launch
             }
-            val isNewer = result.version != BuildConfig.VERSION_NAME
+            val isNewer = result.version != BuildConfig.VERSION_NAME && result.apkUrl.isNotBlank()
             _uiState.update {
                 it.copy(
                     updateAvailableVersion = result.version,
-                    updateUrl = result.url,
+                    updateUrl = result.releaseUrl,
                     updateReleaseNotes = result.notes,
                     updateCheckStatus = if (isNewer) app.getString(com.mmusic.app.R.string.update_available, result.version) else app.getString(com.mmusic.app.R.string.no_update_available),
+                    isUpdateDownloading = false,
+                    updateDownloadProgress = 0f,
                     showUpdateDialog = isNewer && (force || result.version != prefs.getString("last_prompted_update_version", "")),
                     infoDialogMessage = if (!isNewer && force) app.getString(com.mmusic.app.R.string.no_update_available) else it.infoDialogMessage
                 )
             }
             if (isNewer) {
                 prefs.edit().putString("last_prompted_update_version", result.version).apply()
+            }
+        }
+    }
+
+    fun installLatestUpdateFromGithub() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val result = runCatching { fetchLatestReleaseInfo() }.getOrNull()
+            if (result == null) {
+                _uiState.update { it.copy(infoDialogMessage = app.getString(com.mmusic.app.R.string.update_check_failed)) }
+                return@launch
+            }
+            if (result.version == BuildConfig.VERSION_NAME) {
+                _uiState.update { it.copy(infoDialogMessage = app.getString(com.mmusic.app.R.string.no_update_available)) }
+                return@launch
+            }
+            val apkUrl = result.apkUrl
+            if (apkUrl.isBlank()) {
+                _uiState.update { it.copy(infoDialogMessage = app.getString(com.mmusic.app.R.string.update_check_failed)) }
+                return@launch
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !app.packageManager.canRequestPackageInstalls()) {
+                runCatching {
+                    app.startActivity(
+                        Intent(
+                            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                            Uri.parse("package:${app.packageName}")
+                        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    )
+                }
+                _uiState.update {
+                    it.copy(infoDialogMessage = app.getString(com.mmusic.app.R.string.install_permission_required))
+                }
+                return@launch
+            }
+            val targetFile = File(app.cacheDir, "m-music-${result.version}.apk")
+            runCatching { if (targetFile.exists()) targetFile.delete() }
+            _uiState.update {
+                it.copy(
+                    isUpdateDownloading = true,
+                    updateDownloadProgress = 0f,
+                    infoDialogMessage = null
+                )
+            }
+            val downloaded = runCatching {
+                val connection = openConnection(apkUrl)
+                val totalBytes = connection.contentLengthLong.takeIf { it > 0 } ?: -1L
+                connection.inputStream.use { input ->
+                    FileOutputStream(targetFile).use { output ->
+                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                        var bytesRead: Int
+                        var written = 0L
+                        while (input.read(buffer).also { bytesRead = it } >= 0) {
+                            output.write(buffer, 0, bytesRead)
+                            written += bytesRead
+                            if (totalBytes > 0) {
+                                val progress = (written.toDouble() / totalBytes.toDouble()).toFloat().coerceIn(0f, 1f)
+                                _uiState.update { state -> state.copy(updateDownloadProgress = progress) }
+                            }
+                        }
+                    }
+                }
+                connection.disconnect()
+                _uiState.update { state -> state.copy(updateDownloadProgress = 1f) }
+                targetFile
+            }.getOrElse {
+                _uiState.update { state ->
+                    state.copy(
+                        isUpdateDownloading = false,
+                        updateDownloadProgress = 0f,
+                        infoDialogMessage = app.getString(com.mmusic.app.R.string.update_check_failed)
+                    )
+                }
+                return@launch
+            }
+            runCatching {
+                val uri = FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", downloaded)
+                val installIntent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                app.startActivity(installIntent)
+                _uiState.update { state ->
+                    state.copy(
+                        isUpdateDownloading = false,
+                        updateDownloadProgress = 0f,
+                        showUpdateDialog = false
+                    )
+                }
+            }.onFailure {
+                _uiState.update { state ->
+                    state.copy(
+                        isUpdateDownloading = false,
+                        updateDownloadProgress = 0f,
+                        infoDialogMessage = app.getString(com.mmusic.app.R.string.update_check_failed)
+                    )
+                }
             }
         }
     }
@@ -1902,7 +2005,8 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
 
     private data class LatestReleaseInfo(
         val version: String,
-        val url: String,
+        val releaseUrl: String,
+        val apkUrl: String,
         val notes: String
     )
 
@@ -1915,9 +2019,21 @@ class MMusicViewModel(application: Application) : AndroidViewModel(application) 
         val body = connection.inputStream.bufferedReader().use { it.readText() }
         connection.disconnect()
         val json = JSONObject(body)
+        val assets = json.optJSONArray("assets")
+        val apkUrl = buildList {
+            for (index in 0 until (assets?.length() ?: 0)) {
+                assets?.optJSONObject(index)?.let { asset ->
+                    val name = asset.optString("name")
+                    if (name.endsWith(".apk", ignoreCase = true)) {
+                        add(asset.optString("browser_download_url"))
+                    }
+                }
+            }
+        }.firstOrNull().orEmpty()
         return LatestReleaseInfo(
             version = json.optString("tag_name").ifBlank { json.optString("name").ifBlank { BuildConfig.VERSION_NAME } }.removePrefix("v"),
-            url = json.optString("html_url"),
+            releaseUrl = json.optString("html_url"),
+            apkUrl = apkUrl,
             notes = json.optString("body")
         )
     }

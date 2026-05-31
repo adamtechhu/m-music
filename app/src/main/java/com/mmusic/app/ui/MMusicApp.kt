@@ -1,10 +1,15 @@
 package com.mmusic.app.ui
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.hardware.camera2.CameraManager
 import android.content.pm.PackageManager
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.os.SystemClock
 import androidx.core.content.FileProvider
 import androidx.core.content.ContextCompat
@@ -17,6 +22,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -62,6 +69,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.mmusic.app.BuildConfig
 import com.mmusic.app.R
 import com.mmusic.app.data.*
 import coil.compose.AsyncImage
@@ -70,7 +78,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun MMusicApp(
     state: MMusicUiState,
@@ -142,6 +150,7 @@ fun MMusicApp(
     onDismissReleaseNotesDialog: () -> Unit,
     onShowReleaseNotes: () -> Unit,
     onDismissUpdateDialog: () -> Unit,
+    onInstallUpdate: () -> Unit,
     onAcceptWelcome: () -> Unit
 ) {
     val currentTrack = state.tracks.firstOrNull { it.id == state.currentTrackId }
@@ -217,8 +226,10 @@ fun MMusicApp(
                 UpdateAvailableDialog(
                     version = state.updateAvailableVersion.orEmpty(),
                     notes = state.updateReleaseNotes,
-                    url = state.updateUrl,
-                    onDismiss = onDismissUpdateDialog
+                    isDownloadingUpdate = state.isUpdateDownloading,
+                    downloadProgress = state.updateDownloadProgress,
+                    onDismiss = onDismissUpdateDialog,
+                    onInstallUpdate = onInstallUpdate
                 )
             }
             PlaybackModeFeedback(state.playbackMode)
@@ -353,6 +364,7 @@ private fun PlayerTab(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SettingsTab(
     state: MMusicUiState,
@@ -414,60 +426,86 @@ private fun SettingsTab(
         item {
             SettingsSection(visible = selectedSection == "appearance") {
                 Block {
-                Text(stringResource(R.string.ui_style), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                ChipRow { UiStyle.entries.forEach { FilterChip(selected = state.uiStyle == it, onClick = { onStyleSelected(it) }, label = { Text(stringResource(it.titleRes)) }) } }
-                Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.dark_mode_title), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                Column(modifier = Modifier.alpha(if (extraDarkEnabled) 1f else 0.45f)) {
-                    ChipRow {
-                        DarkModeLevel.entries.forEach {
+                    SectionHeader(
+                        title = stringResource(R.string.settings_appearance),
+                        icon = Icons.Rounded.Palette,
+                        subtitle = stringResource(R.string.settings_overview_hint)
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Text(stringResource(R.string.ui_style), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    ThemePickerGrid(
+                        selectedStyle = state.uiStyle,
+                        onStyleSelected = onStyleSelected
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.dark_mode_title), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    Column(modifier = Modifier.alpha(if (extraDarkEnabled) 1f else 0.45f)) {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            DarkModeLevel.entries.forEach {
+                                FilterChip(
+                                    selected = state.darkModeLevel == it,
+                                    onClick = { onDarkModeLevelSelected(it) },
+                                    enabled = extraDarkEnabled,
+                                    label = { Text(stringResource(it.titleRes)) }
+                                )
+                            }
+                        }
+                    }
+                    if (!extraDarkEnabled) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(stringResource(R.string.dark_mode_base_only), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.player_style_title), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        PlayerStyle.entries.forEach {
                             FilterChip(
-                                selected = state.darkModeLevel == it,
-                                onClick = { onDarkModeLevelSelected(it) },
-                                enabled = extraDarkEnabled,
+                                selected = state.playerStyle == it,
+                                onClick = { onPlayerStyleSelected(it) },
                                 label = { Text(stringResource(it.titleRes)) }
                             )
                         }
                     }
-                }
-                if (!extraDarkEnabled) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(stringResource(R.string.dark_mode_base_only), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.player_style_title), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                ChipRow { PlayerStyle.entries.forEach { FilterChip(selected = state.playerStyle == it, onClick = { onPlayerStyleSelected(it) }, label = { Text(stringResource(it.titleRes)) }) } }
-                Spacer(Modifier.height(12.dp))
-                Text(stringResource(R.string.bottom_bar_style_title), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                ChipRow {
-                    BottomBarSize.entries.forEach { size ->
-                        FilterChip(
-                            selected = state.bottomBarSize == size,
-                            onClick = { onBottomBarSizeSelected(size) },
-                            label = { Text(stringResource(size.titleRes)) }
-                        )
+                    Spacer(Modifier.height(12.dp))
+                    Text(stringResource(R.string.bottom_bar_style_title), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(8.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        BottomBarSize.entries.forEach { size ->
+                            FilterChip(
+                                selected = state.bottomBarSize == size,
+                                onClick = { onBottomBarSizeSelected(size) },
+                                label = { Text(stringResource(size.titleRes)) }
+                            )
+                        }
                     }
-                }
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.bottom_bar_floating), state.bottomBarFloating, onBottomBarFloatingChanged)
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.bottom_bar_glass), state.bottomBarGlass, onBottomBarGlassChanged)
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.bottom_bar_compact), state.bottomBarCompact, onBottomBarCompactChanged)
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.bottom_bar_show_labels), state.bottomBarShowLabels, onBottomBarLabelsChanged)
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.bottom_bar_active_glow), state.bottomBarActiveGlow, onBottomBarGlowChanged)
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.show_server_tab), state.showServerTab, onShowServerTabChanged)
-                Spacer(Modifier.height(8.dp))
-                SettingRow(stringResource(R.string.show_radio_tab), state.showRadioTab, onShowRadioTabChanged)
-                Spacer(Modifier.height(10.dp))
-                SettingRow(stringResource(R.string.show_playback_progress), state.showPlaybackProgress, onShowPlaybackProgressChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.bottom_bar_floating), state.bottomBarFloating, onBottomBarFloatingChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.bottom_bar_glass), state.bottomBarGlass, onBottomBarGlassChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.bottom_bar_compact), state.bottomBarCompact, onBottomBarCompactChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.bottom_bar_show_labels), state.bottomBarShowLabels, onBottomBarLabelsChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.bottom_bar_active_glow), state.bottomBarActiveGlow, onBottomBarGlowChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.show_server_tab), state.showServerTab, onShowServerTabChanged)
+                    Spacer(Modifier.height(8.dp))
+                    SettingRow(stringResource(R.string.show_radio_tab), state.showRadioTab, onShowRadioTabChanged)
+                    Spacer(Modifier.height(10.dp))
+                    SettingRow(stringResource(R.string.show_playback_progress), state.showPlaybackProgress, onShowPlaybackProgressChanged)
             }
         }
         }
@@ -882,16 +920,16 @@ private fun SettingsTab(
                 onClick = onCheckForUpdates
             )
             Spacer(Modifier.height(10.dp))
-            AboutLinkCard(
-                icon = Icons.Rounded.OpenInNew,
-                title = stringResource(R.string.release_notes_title),
-                description = stringResource(R.string.release_notes_description),
-                actionLabel = stringResource(R.string.open_release_notes),
-                accent = MaterialTheme.colorScheme.tertiaryContainer,
-                onClick = onShowReleaseNotes
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.version_label), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                AboutLinkCard(
+                    icon = Icons.Rounded.OpenInNew,
+                    title = stringResource(R.string.release_notes_title),
+                    description = stringResource(R.string.release_notes_description),
+                    actionLabel = stringResource(R.string.open_release_notes),
+                    accent = MaterialTheme.colorScheme.tertiaryContainer,
+                    onClick = onShowReleaseNotes
+                )
+                Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.version_label, BuildConfig.VERSION_NAME), color = MaterialTheme.colorScheme.onSurfaceVariant)
         } } }
     }
 }
@@ -942,6 +980,95 @@ private fun SettingsSection(visible: Boolean, content: @Composable () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun SectionHeader(title: String, icon: ImageVector, subtitle: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.8f)
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.padding(10.dp), tint = MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ThemePickerGrid(
+    selectedStyle: UiStyle,
+    onStyleSelected: (UiStyle) -> Unit
+) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        UiStyle.entries.forEach { style ->
+            val accent = themeAccentColor(style)
+            val selected = selectedStyle == style
+            Surface(
+                onClick = { onStyleSelected(style) },
+                shape = RoundedCornerShape(16.dp),
+                color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.96f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = if (selected) 1f else 0.28f)),
+                tonalElevation = if (selected) 4.dp else 0.dp,
+                shadowElevation = if (selected) 3.dp else 0.dp,
+                modifier = Modifier.widthIn(min = 155.dp, max = 185.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .background(accent, CircleShape)
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(style.titleRes),
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1
+                        )
+                    }
+                    if (selected) {
+                        Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = accent)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun themeAccentColor(style: UiStyle): Color = when (style) {
+    UiStyle.Base -> Color(0xFFB7C4FF)
+    UiStyle.NeonGrid -> Color(0xFF53E6FF)
+    UiStyle.MidnightWave -> Color(0xFF7AA2FF)
+    UiStyle.CarbonPulse -> Color(0xFFFF7A59)
+    UiStyle.AuroraFlow -> Color(0xFF9EE7FF)
+    UiStyle.ObsidianInk -> Color(0xFFE6E6E6)
+    UiStyle.SolarDrift -> Color(0xFFFFB347)
+    UiStyle.CrimsonNoir -> Color(0xFFFF6B81)
+    UiStyle.OceanGlass -> Color(0xFF67D6FF)
+    UiStyle.ForestEcho -> Color(0xFF8DDC6F)
+    UiStyle.SunsetFlux -> Color(0xFFFF8A5B)
+    UiStyle.IceSignal -> Color(0xFF8FE9FF)
+    UiStyle.AmberCircuit -> Color(0xFFFFC26A)
+    UiStyle.VioletBloom -> Color(0xFFD9A7FF)
+    UiStyle.MintCurrent -> Color(0xFF74F1C2)
+    UiStyle.SteelGarden -> Color(0xFFC9D3DB)
+    UiStyle.RoseQuartz -> Color(0xFFFF9BC2)
+    UiStyle.CobaltRun -> Color(0xFF7DB2FF)
+    UiStyle.Sandline -> Color(0xFFE9C89B)
+    UiStyle.EmberPulse -> Color(0xFFFF8D6B)
+    UiStyle.PrismNight -> Color(0xFF9BE7FF)
+}
+
 @Composable
 private fun SettingsEntry(title: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
     val containerColor by animateColorAsState(
@@ -1569,23 +1696,41 @@ private fun ReleaseNotesDialog(notes: AppReleaseNotes, onDismiss: () -> Unit) {
 private fun UpdateAvailableDialog(
     version: String,
     notes: String,
-    url: String?,
-    onDismiss: () -> Unit
+    isDownloadingUpdate: Boolean,
+    downloadProgress: Float,
+    onDismiss: () -> Unit,
+    onInstallUpdate: () -> Unit
 ) {
-    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.update_available, version)) },
-        text = { Text(notes.ifBlank { stringResource(R.string.check_updates_description) }) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(notes.ifBlank { stringResource(R.string.check_updates_description) })
+                if (isDownloadingUpdate) {
+                    if (downloadProgress > 0f) {
+                        LinearProgressIndicator(
+                            progress = { downloadProgress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "${(downloadProgress.coerceIn(0f, 1f) * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    }
+                }
+            }
+        },
         confirmButton = {
             TextButton(
-                onClick = {
-                    if (!url.isNullOrBlank()) {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-                    }
-                    onDismiss()
-                }
-            ) { Text(stringResource(R.string.open_link)) }
+                enabled = !isDownloadingUpdate,
+                onClick = onInstallUpdate
+            ) {
+                Text(if (isDownloadingUpdate) stringResource(R.string.check_updates_action) else stringResource(R.string.download_and_install))
+            }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
@@ -1647,8 +1792,10 @@ private fun FullscreenPlayer(
     var showTopMenu by remember { mutableStateOf(false) }
     var showServerShareDialog by remember { mutableStateOf(false) }
     var showDiscoDialog by remember { mutableStateOf(false) }
+    var showDiscoVibrationDialog by remember { mutableStateOf(false) }
     var showMetadataDialog by remember { mutableStateOf(false) }
     var discoEnabled by remember { mutableStateOf(false) }
+    var discoVibrationEnabled by remember { mutableStateOf(true) }
     var pendingDiscoEnable by remember { mutableStateOf(false) }
     val latestIsPlaying by rememberUpdatedState(state.isPlaying)
     val latestPositionMs by rememberUpdatedState(state.playbackPositionMs)
@@ -1662,6 +1809,9 @@ private fun FullscreenPlayer(
     }
     val cameraManager = remember {
         context.getSystemService(CameraManager::class.java)
+    }
+    val vibrator = remember(context) {
+        resolveVibrator(context)
     }
     val torchCameraId = remember(cameraManager) {
         runCatching {
@@ -1687,7 +1837,7 @@ private fun FullscreenPlayer(
         animateToMiniPlayer()
     }
 
-    LaunchedEffect(discoEnabled, track.id, torchCameraId) {
+    LaunchedEffect(discoEnabled, discoVibrationEnabled, track.id, torchCameraId) {
         if (!discoEnabled || torchCameraId == null || cameraManager == null) {
             runCatching { torchCameraId?.let { cameraManager?.setTorchMode(it, false) } }
             return@LaunchedEffect
@@ -1714,6 +1864,9 @@ private fun FullscreenPlayer(
                     (beatPhase in 180L..245L)
                 )
 
+            if (latestIsPlaying && discoVibrationEnabled && pulseOn && lastTorchState != true) {
+                pulseVibration(vibrator, if ((effectivePosition / beatIntervalMs) % 4L == 0L) 60L else 28L)
+            }
             if (lastTorchState != pulseOn) {
                 runCatching { cameraManager.setTorchMode(torchCameraId, pulseOn) }
                 lastTorchState = pulseOn
@@ -1821,22 +1974,42 @@ private fun FullscreenPlayer(
                         }
                     )
                 }
-                IconButton(
-                    onClick = {
-                        if (discoEnabled) {
-                            discoEnabled = false
-                            pendingDiscoEnable = false
-                        } else {
-                            showDiscoDialog = true
-                        }
-                    },
-                    modifier = Modifier.align(Alignment.TopEnd)
+                Row(
+                    modifier = Modifier.align(Alignment.TopEnd),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(
-                        Icons.Rounded.FlashlightOn,
-                        contentDescription = stringResource(R.string.disco_party_beta_title),
-                        tint = if (discoEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    IconButton(
+                        onClick = {
+                            if (discoEnabled) {
+                                discoEnabled = false
+                                pendingDiscoEnable = false
+                            } else {
+                                showDiscoDialog = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Rounded.FlashlightOn,
+                            contentDescription = stringResource(R.string.disco_party_title),
+                            tint = if (discoEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            if (discoVibrationEnabled) {
+                                discoVibrationEnabled = false
+                                pulseVibration(vibrator, 25L)
+                            } else {
+                                showDiscoVibrationDialog = true
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Rounded.Vibration,
+                            contentDescription = stringResource(R.string.music_vibration_beat),
+                            tint = if (discoVibrationEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -1975,9 +2148,54 @@ private fun FullscreenPlayer(
                     Text(stringResource(android.R.string.cancel))
                 }
             },
-            title = { Text(stringResource(R.string.disco_party_beta_title)) },
-            text = { Text(stringResource(R.string.disco_party_beta_message)) }
+            title = { Text(stringResource(R.string.disco_party_title)) },
+            text = { Text(stringResource(R.string.disco_party_message)) }
         )
+    }
+    if (showDiscoVibrationDialog) {
+        AlertDialog(
+            onDismissRequest = { showDiscoVibrationDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        discoVibrationEnabled = true
+                        showDiscoVibrationDialog = false
+                        pulseVibration(vibrator, 90L)
+                    }
+                ) {
+                    Text(stringResource(R.string.onboarding_ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDiscoVibrationDialog = false }) {
+                    Text(stringResource(android.R.string.cancel))
+                }
+            },
+            title = { Text(stringResource(R.string.music_vibration_warning_title)) },
+            text = { Text(stringResource(R.string.music_vibration_warning_message)) }
+        )
+    }
+}
+
+private fun resolveVibrator(context: Context): Vibrator? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+    } else {
+        ContextCompat.getSystemService(context, Vibrator::class.java)
+    }
+}
+
+private fun pulseVibration(vibrator: Vibrator?, durationMs: Long) {
+    if (vibrator == null || !vibrator.hasVibrator()) return
+    runCatching {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            vibrator.vibrate(
+                VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE)
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(durationMs)
+        }
     }
 }
 

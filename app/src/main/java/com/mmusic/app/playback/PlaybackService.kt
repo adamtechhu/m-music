@@ -5,11 +5,12 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.content.Context
 import android.content.Intent
 import android.media.AudioDeviceInfo
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -37,6 +38,8 @@ class PlaybackService : Service() {
     private var bassBoost: BassBoost? = null
     private var virtualizer: Virtualizer? = null
     private var loudnessEnhancer: LoudnessEnhancer? = null
+    private val audioManager by lazy { getSystemService(Context.AUDIO_SERVICE) as AudioManager }
+    private var audioFocusRequest: AudioFocusRequest? = null
     private lateinit var mediaSession: MediaSessionCompat
     private var currentTrack: ServiceTrack? = null
     private val progressHandler = Handler(Looper.getMainLooper())
@@ -124,10 +127,15 @@ class PlaybackService : Service() {
             ACTION_REFRESH_AUDIO -> refreshAudioEffects()
             ACTION_STOP -> stopPlayback()
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopPlayback()
+        super.onTaskRemoved(rootIntent)
+    }
 
     private fun playTrack(track: ServiceTrack) {
         currentTrack = track
@@ -138,6 +146,12 @@ class PlaybackService : Service() {
         val trackUrl = track.url.trim()
         if (trackUrl.isBlank()) {
             handlePlaybackFailure(track)
+            return
+        }
+        if (!requestAudioFocus()) {
+            currentTrack = null
+            PlaybackStateStore.update(PlaybackSnapshot())
+            stopSelf()
             return
         }
         val player = runCatching {
@@ -185,6 +199,7 @@ class PlaybackService : Service() {
                     )
                     updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, durationMs)
                     startForeground(NOTIFICATION_ID, buildNotification(track, false, false))
+                    abandonAudioFocus()
                 }
                 setOnErrorListener { _, _, _ ->
                     handlePlaybackFailure(track)
@@ -208,6 +223,7 @@ class PlaybackService : Service() {
     private fun handlePlaybackFailure(track: ServiceTrack) {
         stopProgressUpdates()
         releaseAudioEffects()
+        abandonAudioFocus()
         mediaPlayer?.release()
         mediaPlayer = null
         PlaybackStateStore.update(
@@ -244,7 +260,11 @@ class PlaybackService : Service() {
             )
             updatePlaybackState(PlaybackStateCompat.STATE_PAUSED, positionMs)
             startForeground(NOTIFICATION_ID, buildNotification(track, false, false))
+            abandonAudioFocus()
         } else {
+            if (!requestAudioFocus()) {
+                return
+            }
             player.start()
             PlaybackStateStore.update(
                 PlaybackSnapshot(
@@ -263,11 +283,12 @@ class PlaybackService : Service() {
 
     private fun stopPlayback() {
         stopProgressUpdates()
-        mediaPlayer?.stop()
+        runCatching { mediaPlayer?.stop() }
         mediaPlayer?.release()
         mediaPlayer = null
         currentTrack = null
         releaseAudioEffects()
+        abandonAudioFocus()
         PlaybackStateStore.update(PlaybackSnapshot())
         updatePlaybackState(PlaybackStateCompat.STATE_STOPPED, 0L)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -467,10 +488,37 @@ class PlaybackService : Service() {
     override fun onDestroy() {
         stopProgressUpdates()
         releaseAudioEffects()
+        abandonAudioFocus()
         mediaPlayer?.release()
         mediaPlayer = null
         mediaSession.release()
         super.onDestroy()
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        val request = audioFocusRequest ?: AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener { focusChange ->
+                when (focusChange) {
+                    AudioManager.AUDIOFOCUS_LOSS,
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> stopPlayback()
+                }
+            }
+            .build()
+            .also { audioFocusRequest = it }
+        return audioManager.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    private fun abandonAudioFocus() {
+        audioFocusRequest?.let { request ->
+            runCatching { audioManager.abandonAudioFocusRequest(request) }
+        }
     }
 
     private fun refreshAudioEffects() {

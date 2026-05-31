@@ -39,7 +39,17 @@ enum class UiStyle(@StringRes val titleRes: Int) {
     CrimsonNoir(R.string.theme_crimson_noir),
     OceanGlass(R.string.theme_ocean_glass),
     ForestEcho(R.string.theme_forest_echo),
-    SunsetFlux(R.string.theme_sunset_flux)
+    SunsetFlux(R.string.theme_sunset_flux),
+    IceSignal(R.string.theme_ice_signal),
+    AmberCircuit(R.string.theme_amber_circuit),
+    VioletBloom(R.string.theme_violet_bloom),
+    MintCurrent(R.string.theme_mint_current),
+    SteelGarden(R.string.theme_steel_garden),
+    RoseQuartz(R.string.theme_rose_quartz),
+    CobaltRun(R.string.theme_cobalt_run),
+    Sandline(R.string.theme_sandline),
+    EmberPulse(R.string.theme_ember_pulse),
+    PrismNight(R.string.theme_prism_night)
 }
 
 enum class DarkModeLevel(@StringRes val titleRes: Int) {
@@ -259,7 +269,9 @@ data class MMusicUiState(
     val updateReleaseNotes: String = "",
     val updateCheckStatus: String = "",
     val showUpdateDialog: Boolean = false,
-    val releaseNotes: AppReleaseNotes = AppReleaseNotes(version = "1.1.2", pages = emptyList()),
+    val isUpdateDownloading: Boolean = false,
+    val updateDownloadProgress: Float = 0f,
+    val releaseNotes: AppReleaseNotes = AppReleaseNotes(version = "1.2.0", pages = emptyList()),
     val showReleaseNotesDialog: Boolean = false,
     val serverConfig: ServerConfig = ServerConfig(
         endpoint = "https://media.example.com/library",

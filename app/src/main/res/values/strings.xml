@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">M-Music</string>
     <string name="player_tab">Player</string>
@@ -6,6 +6,7 @@
     <string name="sources">Sources</string>
     <string name="settings">Settings</string>
     <string name="player_subtitle">Your music and playback in one place</string>
+    <string name="settings_overview_hint">Quick access to theme, audio, storage and project info.</string>
     <string name="welcome_title">Modern music management for every storage source</string>
     <string name="welcome_subtitle">Browse by tags, album, artist, folders, or source connection.</string>
     <string name="onboarding_title">Welcome to the M-Music app!</string>
@@ -46,6 +47,16 @@
     <string name="theme_ocean_glass">Ocean Glass</string>
     <string name="theme_forest_echo">Forest Echo</string>
     <string name="theme_sunset_flux">Sunset Flux</string>
+    <string name="theme_ice_signal">Ice Signal</string>
+    <string name="theme_amber_circuit">Amber Circuit</string>
+    <string name="theme_violet_bloom">Violet Bloom</string>
+    <string name="theme_mint_current">Mint Current</string>
+    <string name="theme_steel_garden">Steel Garden</string>
+    <string name="theme_rose_quartz">Rose Quartz</string>
+    <string name="theme_cobalt_run">Cobalt Run</string>
+    <string name="theme_sandline">Sandline</string>
+    <string name="theme_ember_pulse">Ember Pulse</string>
+    <string name="theme_prism_night">Prism Night</string>
     <string name="dark_mode_title">Dark mode level</string>
     <string name="dark_mode_standard">Standard dark</string>
     <string name="dark_mode_extra">Extra dark</string>
@@ -115,7 +126,7 @@
     <string name="youtube_title">YouTube</string>
     <string name="open_link">Open link</string>
     <string name="send_email">Send email</string>
-    <string name="version_label">Version: 1.1.2</string>
+    <string name="version_label">Version: %1$s</string>
     <string name="check_updates_title">Check for updates</string>
     <string name="check_updates_description">Look for new releases on the GitHub project page.</string>
     <string name="check_updates_action">Check now</string>
@@ -131,6 +142,7 @@
     <string name="update_check_failed">Update check failed.</string>
     <string name="update_available">Update available: %1$s</string>
     <string name="no_update_available">No newer update is available.</string>
+    <string name="install_permission_required">Allow installs from this app, then try the update again.</string>
     <string name="add_favorite">Add to favorites</string>
     <string name="remove_favorite">Remove from favorites</string>
     <string name="edit_metadata_title">Edit metadata</string>
@@ -154,9 +166,9 @@
     <string name="radio_metadata_toggle">Show radio program info</string>
     <string name="radio_now_playing_title">Current radio program / music</string>
     <string name="radio_metadata_unavailable">No extra live metadata is available for this station.</string>
-    <string name="release_notes_page_1">✨ New Features and Fixes\n\n📁 Folder-level Shuffle\nWhen you filter to one or more folders, shuffle playback now stays strictly inside the selected folders only.\n\n🔀 Intelligent Shuffle System\nThe app now maps the filtered list, numbers every track, and builds a fixed random order before playback continues.</string>
-    <string name="release_notes_page_2">🔄 Background Next Shuffle\nBefore you reach the end of the current random list, the app already prepares the next shuffled round in the background for smoother playback.\n\n⚡ Instant and Scheduled Music Scan\nMusic refresh now starts immediately, and the app keeps preparing automatic refresh cycles every 5 days.</string>
-    <string name="release_notes_page_3">⚙️ Manual Check\nA new manual music refresh button is now available in Settings whenever you want to start a scan yourself.\n\n✅ M-Music v1.1.2\nThis update focuses on stricter folder-based shuffle, smarter random playback, and faster music refresh behavior.</string>
+    <string name="release_notes_page_1">✨ M-Music v1.2.0\n\nPlayback is now more predictable and better behaved. Music stops when the app is fully closed, and other apps that start audio can take over properly.\n\nThe playback service also behaves more cleanly in the background and no longer leaves behind stale notifications when it should stop.</string>
+    <string name="release_notes_page_2">🎛️ Fresher Themes and a Clearer Settings Screen\n\nThe Settings page was refreshed to make themes easier to scan, and ten new themes were added for more variety.\n\nDisco mode now includes a dedicated vibration control beside the flashlight, so the light-and-haptic effect can be tuned to taste.</string>
+    <string name="release_notes_page_3">⬇️ Direct GitHub Updates\n\nUpdates can now be downloaded straight from the GitHub release APK and launched for installation from inside the app.\n\nThis version also includes smaller polish passes across the interface and playback flow to make the app feel smoother overall.</string>
     <string name="language_english">English</string>
     <string name="language_hungarian">Hungarian</string>
     <string name="language_german">German</string>
@@ -235,8 +247,12 @@
     <string name="server_mobile_data_warning">Mobile data is active. Server playback or download may use your mobile traffic.</string>
     <string name="server_share_blocked_title">Sharing is not available</string>
     <string name="server_share_blocked_message">For security reasons, server tracks cannot be shared as files.</string>
-    <string name="disco_party_beta_title">Disco Party BETA</string>
-    <string name="disco_party_beta_message">This will turn on the flashlight and make it flash to the beat of the music. It can drain the battery faster.</string>
+    <string name="disco_party_title">Disco Party</string>
+    <string name="disco_party_message">This will turn on the flashlight and vibration beat with the music. It can drain the battery faster.</string>
+    <string name="music_vibration_beat">Vibration beat</string>
+    <string name="music_vibration_warning_title">Turn on vibration beat?</string>
+    <string name="music_vibration_warning_message">This will vibrate the phone to the beat of the music and can drain the battery faster.</string>
+    <string name="download_and_install">Download and install</string>
     <string name="playback_mode_normal">Normal</string>
     <string name="playback_mode_repeat">Repeat</string>
     <string name="playback_mode_shuffle">Shuffle</string>

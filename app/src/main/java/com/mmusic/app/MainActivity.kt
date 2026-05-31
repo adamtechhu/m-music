@@ -145,6 +145,7 @@ class MainActivity : ComponentActivity() {
                     onDismissReleaseNotesDialog = viewModel::dismissReleaseNotesDialog,
                     onShowReleaseNotes = viewModel::showReleaseNotesDialog,
                     onDismissUpdateDialog = viewModel::dismissUpdateDialog,
+                    onInstallUpdate = viewModel::installLatestUpdateFromGithub,
                     onAcceptWelcome = viewModel::acceptWelcomeDialog
                 )
             }
